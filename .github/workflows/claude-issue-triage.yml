@@ -1,0 +1,152 @@
+name: Claude Issue Triage
+
+on:
+  issues:
+    types: [opened, edited]
+
+concurrency:
+  group: issue-triage-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  triage:
+    # No reaccionar a bots ni a issues marcados para saltarse el triage
+    if: >-
+      github.event.sender.type != 'Bot' &&
+      !contains(github.event.issue.labels.*.name, 'skip-triage')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Asegurar etiquetas de triage
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/ensure-labels.sh
+
+      - name: Run Claude Issue Triage
+        id: claude-triage
+        uses: anthropics/claude-code-action@v1
+        env:
+          GH_TOKEN: ${{ github.token }}
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+
+          prompt: |
+            REPO: ${{ github.repository }}
+            ISSUE NUMBER: ${{ github.event.issue.number }}
+            EVENTO: ${{ github.event.action }}
+            AUTOR: ${{ github.event.issue.user.login }}
+            TÍTULO: ${{ github.event.issue.title }}
+
+            CUERPO DEL ISSUE:
+            ---
+            ${{ github.event.issue.body }}
+            ---
+
+            Eres el encargado de hacer triage de issues en el repositorio de
+            un Tetris clásico en JavaScript vanilla (HTML5 Canvas, sin
+            dependencias, sin build). Lee `CLAUDE.md` para entender la
+            arquitectura antes de nada. Responde y escribe siempre en
+            español.
+
+            ## 1. Investiga antes de concluir
+
+            - Lee el código relevante (`game.js`, `index.html`, `style.css`,
+              `README.md`) con tus herramientas de lectura/búsqueda para
+              entender qué función o parte del sistema describe el issue.
+              No adivines: cita funciones y, cuando puedas, líneas concretas.
+            - Busca posibles duplicados con:
+              `gh search issues --repo ${{ github.repository }} "<términos clave>"`.
+
+            ## 2. Clasifica con etiquetas
+
+            Consulta las etiquetas disponibles con `gh label list` (ya
+            incluye el set de triage: `tipo:*`, `area:*`, `prio:*`, `size:*`,
+            `estado:*`, más las etiquetas por defecto del repo como `bug`,
+            `enhancement`, `documentation`, `question`, `accessibility`,
+            `good first issue`, `help wanted`, `invalid`, `wontfix`).
+
+            Aplica con `gh issue edit ${{ github.event.issue.number }} --add-label "..."`:
+
+            - Exactamente **una** etiqueta `tipo:*`.
+            - Exactamente **una** etiqueta `prio:*` y **una** `size:*`.
+            - Una o varias etiquetas `area:*` según el código implicado
+              (gameplay = colisión/rotación/gravedad/lockPiece/spawn;
+              render = draw/drawNext/ghost piece/canvas; ui = HTML/CSS/HUD/
+              overlay; controles = listeners de teclado; puntuacion =
+              LINE_SCORES/nivel/dropInterval; proyecto = README/workflows/
+              config).
+            - `estado:necesita-info` si falta información para reproducir el
+              problema (pasos, navegador, capturas, etc.).
+            - `estado:duplicado` si ya existe un issue igual; en ese caso
+              comenta enlazando el issue original.
+            - Nunca inventes una etiqueta que no exista en `gh label list`.
+            - Si el evento es una edición (`EVENTO: edited`) y el issue ya
+              tenía etiquetas de un grupo que ya no aplican, quítalas con
+              `--remove-label` antes de añadir las nuevas, para no dejar
+              etiquetas contradictorias del mismo grupo.
+
+            ## 3. Publica un comentario de diagnóstico
+
+            Escribe un comentario en español, en Markdown, con esta
+            estructura exacta (usa estos encabezados literalmente):
+
+            ```
+            <!-- claude-triage -->
+            ## 🔍 Diagnóstico automático
+
+            **Resumen**
+            ...
+
+            **Clasificación**
+            - Tipo: ...
+            - Prioridad: ... (justificación breve)
+            - Área(s): ...
+            - Tamaño estimado: ...
+
+            **Dónde vive esto en el código**
+            - `archivo` → `función()` — por qué es relevante
+
+            **Cómo reproducirlo**
+            1. ...
+
+            **Enfoque propuesto**
+            1. ...
+
+            **Riesgos y qué revisar**
+            - ...
+
+            **Dudas pendientes**
+            - ...
+            ```
+
+            Antes de comentar, revisa si ya existe un comentario tuyo previo
+            (empieza por `<!-- claude-triage -->`) usando
+            `gh issue view ${{ github.event.issue.number }} --json comments`.
+            - Si existe, **actualízalo** con
+              `gh issue comment ${{ github.event.issue.number }} --edit-last --body-file <archivo>`
+              (asegúrate de que el último comentario tuyo sea efectivamente
+              ese; si no, usa `gh api` para editar el comentario correcto por
+              su id en vez de `--edit-last`).
+            - Si no existe, créalo con
+              `gh issue comment ${{ github.event.issue.number }} --body-file <archivo>`.
+
+            No dupliques el comentario de diagnóstico en cada edición del
+            issue: siempre debe quedar como máximo uno.
+
+            ## 4. Límites
+
+            - Solo aplicas etiquetas y publicas el comentario de
+              diagnóstico. No modifiques el cuerpo del issue, no escribas
+              código, no abras pull requests ni commits.
+
+          claude_args: >-
+            --allowedTools "Bash(gh issue view:*),Bash(gh issue edit:*),Bash(gh issue comment:*),Bash(gh label list:*),Bash(gh search:*),Bash(gh api:*),Read,Grep,Glob"
+            --max-turns 20

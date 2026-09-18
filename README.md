@@ -25,6 +25,7 @@ Implementación del clásico **Tetris** en JavaScript vanilla, usando HTML5 Canv
   - [Tecnologías](#tecnologías)
   - [Estructura del proyecto](#estructura-del-proyecto)
   - [Personalización](#personalización)
+  - [Automatización con Claude Code](#automatización-con-claude-code)
   - [Licencia](#licencia)
 
 ---
@@ -180,6 +181,14 @@ Algunos parámetros fáciles de tunear en `game.js`:
 > Si cambias `COLS`, `ROWS` o `BLOCK`, recuerda ajustar también `width` y `height` del `<canvas id="board">` en `index.html` para que coincida (`COLS × BLOCK` × `ROWS × BLOCK`).
 
 ---
+
+## Automatización con Claude Code
+
+Este repositorio usa [Claude Code Action](https://github.com/anthropics/claude-code-action) en GitHub Actions (`.github/workflows/`):
+
+- **`claude.yml`** — responde cuando se menciona `@claude` en un issue, comentario o revisión de PR.
+- **`claude-code-review.yml`** — revisa automáticamente cada pull request abierto o actualizado.
+- **`claude-issue-triage.yml`** — al abrir o editar un issue, Claude lo analiza contra el código, aplica etiquetas (`tipo:*`, `area:*`, `prio:*`, `size:*`, `estado:*`, ver `.github/scripts/ensure-labels.sh`) y publica un comentario de diagnóstico en español con la hipótesis técnica y un enfoque propuesto. Se puede excluir un issue puntual con la etiqueta `skip-triage`.
 
 ## Licencia
 
