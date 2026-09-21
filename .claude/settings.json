@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(curl -s --max-time 10 https://wttr.in/:*)",
+      "Bash(curl -s --max-time 10 https://api.open-meteo.com/:*)",
+      "Bash(curl -s --max-time 10 https://geocoding-api.open-meteo.com/:*)",
+      "Bash(curl -s --max-time 10 https://ipapi.co/:*)"
+    ]
+  }
+}
