@@ -142,6 +142,7 @@ function ghostY() {
 }
 
 function hardDrop() {
+  if (gameOver) return;
   const gy = ghostY();
   score += (gy - current.y) * 2;
   current.y = gy;
@@ -149,6 +150,7 @@ function hardDrop() {
 }
 
 function softDrop() {
+  if (gameOver) return;
   if (!collide(current.shape, current.x, current.y + 1)) {
     current.y++;
     score += 1;
@@ -159,6 +161,7 @@ function softDrop() {
 }
 
 function lockPiece() {
+  if (gameOver) return;
   merge();
   clearLines();
   spawn();
@@ -169,6 +172,7 @@ function spawn() {
   next = randomPiece();
   if (collide(current.shape, current.x, current.y)) {
     endGame();
+    return;
   }
   drawNext();
 }
@@ -242,7 +246,10 @@ function drawNext() {
 }
 
 function endGame() {
+  if (gameOver) return;
   gameOver = true;
+  // La parada real del bucle la hace la guarda en loop(); esto es solo
+  // una red de seguridad por si endGame() se invoca fuera de un frame.
   cancelAnimationFrame(animId);
   overlayTitle.textContent = 'GAME OVER';
   overlayScore.textContent = `Puntuación: ${score.toLocaleString()}`;
@@ -276,10 +283,12 @@ function loop(ts) {
     }
   }
   draw();
+  if (gameOver || paused) return; // fin del bucle: no se reprograma
   animId = requestAnimationFrame(loop);
 }
 
 function init() {
+  cancelAnimationFrame(animId);
   board = createBoard();
   score = 0;
   lines = 0;
@@ -293,7 +302,6 @@ function init() {
   spawn();
   updateHUD();
   overlay.classList.add('hidden');
-  cancelAnimationFrame(animId);
   animId = requestAnimationFrame(loop);
 }
 

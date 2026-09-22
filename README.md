@@ -143,12 +143,13 @@ init()
      ├─ acumula dt
      ├─ si dt ≥ dropInterval → baja la pieza o llama a lockPiece()
      ├─ draw()  (grid + tablero + ghost + pieza actual)
-     └─ requestAnimationFrame(loop)
+     └─ si el juego sigue activo (no game over, no pausa) → requestAnimationFrame(loop)
+        en caso contrario, el bucle no se reprograma y se detiene aquí
 
    keydown → mover / rotar / soft-drop / hard-drop / pausa
 ```
 
-Cuando una pieza recién generada ya colisiona al aparecer (`spawn`), se dispara `endGame()` y se muestra el overlay de **Game Over**.
+Cuando una pieza recién generada ya colisiona al aparecer (`spawn`), se dispara `endGame()` y se muestra el overlay de **Game Over**. `loop()` comprueba `gameOver` (y `paused`) justo después de dibujar y, si está activo, no vuelve a pedir un nuevo frame: el bucle se detiene ahí mismo y el tablero queda congelado en su estado final, sin que sigan cayendo o fijándose piezas detrás del overlay.
 
 ---
 
