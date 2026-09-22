@@ -17,6 +17,7 @@ Implementación del clásico **Tetris** en JavaScript vanilla, usando HTML5 Canv
     - [Opción 1: abrir el archivo directamente](#opción-1-abrir-el-archivo-directamente)
     - [Opción 2: servidor local (recomendado)](#opción-2-servidor-local-recomendado)
   - [Controles](#controles)
+  - [Tema claro / oscuro](#tema-claro--oscuro)
   - [Cómo funciona](#cómo-funciona)
     - [1. `index.html`](#1-indexhtml)
     - [2. `style.css`](#2-stylecss)
@@ -89,6 +90,16 @@ Después abre `http://localhost:8000` en el navegador.
 
 ---
 
+## Tema claro / oscuro
+
+El botón **TEMA** en el panel lateral alterna entre modo oscuro (por defecto) y modo claro. La preferencia se guarda en `localStorage` (clave `tetris-theme`), así que se respeta entre sesiones.
+
+- Los colores de la interfaz (fondo, panel, overlay, botones) están definidos como variables CSS en `:root` (`style.css`); el modo claro las sobrescribe con `:root[data-theme="light"]`.
+- El tablero (`<canvas id="board">`) se pinta directamente con Canvas 2D, así que las líneas de la cuadrícula y el highlight de los bloques no heredan CSS: `game.js` mantiene su propia tabla `CANVAS_THEME_COLORS` (`dark` / `light`) y la aplica al redibujar cuando cambia el tema.
+- Los colores de las piezas (`COLORS`) se mantienen iguales en ambos temas para conservar la identidad visual del Tetris.
+
+---
+
 ## Cómo funciona
 
 El juego se compone de tres archivos que cooperan:
@@ -103,7 +114,7 @@ Define la estructura visual:
 
 ### 2. `style.css`
 
-Aporta el aspecto visual con estética _dark / retro arcade_: fondo oscuro, tipografía monoespaciada para los marcadores y _backdrop blur_ en los overlays.
+Aporta el aspecto visual con estética _retro arcade_: tipografía monoespaciada para los marcadores y _backdrop blur_ en los overlays. Todos los colores están centralizados en variables CSS (`:root`), con una variante `:root[data-theme="light"]` para el modo claro; el modo oscuro es el valor por defecto.
 
 ### 3. `game.js`
 
