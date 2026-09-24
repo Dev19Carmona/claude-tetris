@@ -18,6 +18,7 @@ Implementación del clásico **Tetris** en JavaScript vanilla, usando HTML5 Canv
     - [Opción 2: servidor local (recomendado)](#opción-2-servidor-local-recomendado)
   - [Controles](#controles)
   - [Tema claro / oscuro](#tema-claro--oscuro)
+  - [Skins visuales](#skins-visuales)
   - [Power-ups](#power-ups)
   - [Cómo funciona](#cómo-funciona)
     - [1. `index.html`](#1-indexhtml)
@@ -104,6 +105,36 @@ El icono 🌙/☀️ al pie del panel derecho alterna entre modo oscuro (por def
 
 ---
 
+## Skins visuales
+
+El `<select>` junto al icono de tema (panel derecho) cambia el estilo con el que se pintan los
+bloques del tablero, la pieza fantasma y la vista previa. La preferencia se guarda en
+`localStorage` (clave `tetris-skin`) y el cambio se aplica **al instante**, sin recargar la
+página ni perder la partida en curso.
+
+| Skin       | Aspecto                                                                                     |
+| ---------- | -------------------------------------------------------------------------------------------- |
+| 🕹️ Retro  | El aspecto original: colores planos y un highlight superior sutil. Es la skin por defecto.   |
+| 🌈 Neón    | Paleta saturada sobre **fondo negro forzado** (se mantiene negro incluso en tema claro) y un resplandor (`shadowBlur`/`shadowColor`) alrededor de cada bloque. |
+| 🎀 Pastel  | Paleta de tonos suaves con **esquinas redondeadas** en cada bloque.                           |
+| 👾 Pixel   | Colores clásicos con una **textura de subcuadrados 4×4** superpuesta, simulando un sprite de 8 bits. |
+
+Notas de diseño:
+
+- Cada skin define su propia paleta de colores (`SKINS.<nombre>.colors`, en `game.js`), con los
+  mismos índices que `COLORS` (piezas 1–7, tuerca 8, power-ups 9–13). Retro y Pixel reutilizan
+  directamente `COLORS`; Neón y Pastel usan tonos propios también para los power-ups, ya que sus
+  iconos (emoji) siguen siendo perfectamente legibles encima de cualquier color de fondo.
+- La skin solo decide **cómo se pinta el relleno de una celda** (`paintCell`); el icono de
+  power-up, el agujero circular de la tuerca y la estrella del comodín del Tinte los sigue
+  dibujando siempre la misma lógica común (`drawBlock`/`drawHole`/`drawWild`), que delega en
+  `paintCell` para el fondo. Así ninguna skin duplica esa lógica.
+- El tema claro/oscuro (`CANVAS_THEME_COLORS`) y la skin conviven sin pisarse: colores de UI como
+  la rejilla o el highlight siguen saliendo del tema salvo que la skin decida sobreescribirlos
+  (Neón fuerza su propio fondo y color de rejilla; el resto respeta el tema activo).
+
+---
+
 ## Power-ups
 
 Cada **10 líneas** eliminadas (contador `POWERUP_EVERY` en `game.js`) la siguiente pieza especial se
@@ -171,6 +202,7 @@ Contiene toda la lógica del juego. A grandes rasgos:
 - **Nivel y velocidad**: el nivel sube cada 10 líneas; la velocidad de caída se calcula como `max(100, 1000 − (level − 1) × 90)` milisegundos.
 - **Ghost piece** (`ghostY`): proyecta la posición final de la pieza actual hacia abajo y la dibuja con `globalAlpha = 0.2`.
 - **Power-ups** (tipos 9–13, ver sección [Power-ups](#power-ups)): `lockPiece()` comprueba `POWERUP_EFFECTS[current.type]` antes de decidir entre `merge()` (pieza normal) o ejecutar el efecto correspondiente (`bombEffect`, `rayEffect`, `dyeEffect`, `gravityEffect`, `freezeEffect`). El comodín del Tinte usa el centinela `WILD` (`-2`), igual de "sólido" que `HOLE` para `collide`/`clearLines`, y se limpia en `clearWilds()` tras cada línea real.
+- **Skins visuales** (ver sección [Skins visuales](#skins-visuales)): `drawBlock` delega el relleno de cada celda en `SKINS[currentSkin].paintCell`, mientras que `drawHole`/`drawWild` reutilizan ese mismo `paintCell` para su fondo antes de dibujar el agujero o la estrella. `drawGrid`, `draw()` y `drawNext()` consultan `SKINS[currentSkin].gridColor`/`canvasBg` para dejar que una skin (p.ej. Neón) sobreescriba color de rejilla y fondo del canvas por encima del tema claro/oscuro.
 
 ### Flujo del juego
 

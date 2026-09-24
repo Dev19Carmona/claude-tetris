@@ -122,6 +122,12 @@ body {
 .panel-actions {
   margin-top: auto;
   display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.icon-actions {
+  display: flex;
   gap: 8px;
 }
 
@@ -215,6 +221,24 @@ body {
 }
 
 .icon-btn:hover {
+  background: var(--toggle-hover-bg);
+}
+
+/* ---- Selector de skin visual ---- */
+.skin-select {
+  width: 100%;
+  background: var(--toggle-bg);
+  border: 1px solid var(--toggle-border);
+  color: var(--toggle-text);
+  border-radius: 6px;
+  padding: 7px 6px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.skin-select:hover {
   background: var(--toggle-hover-bg);
 }
 

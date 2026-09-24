@@ -81,6 +81,126 @@ const CANVAS_THEME_COLORS = {
   light: { grid: '#dde0f0', highlight: 'rgba(255,255,255,0.35)', hole: '#ffffff', holeEdge: 'rgba(30,34,60,0.25)', wild: '#e6b800' },
 };
 
+// --- Skins visuales -------------------------------------------------------
+// Cada skin define su propia paleta (`colors`, mismos índices que COLORS:
+// 0 vacío, 1-7 piezas normales, 8 tuerca, 9-13 power-ups) y una función
+// `paintCell(context, x, y, size, color)` que pinta el relleno de UNA celda
+// (sin tocar el icono de power-up, el agujero de la tuerca ni la estrella
+// del comodín: eso lo sigue resolviendo `drawBlock`/`drawHole`/`drawWild`,
+// que llaman a `paintCell` para el fondo y luego dibujan encima lo que
+// corresponda). Así se evita duplicar la lógica de power-ups/wild/hole en
+// cada skin: solo cambia el "cómo se pinta un cuadrado", no el "qué se pinta
+// encima".
+//
+// `canvasBg`: si no es null, se usa como fondo forzado del canvas (se pinta
+// por encima del fondo CSS del tema), ignorando el tema claro/oscuro. Lo usa
+// `neon` para garantizar un fondo negro pase lo que pase.
+// `gridColor`: si no es null, sustituye a `canvasTheme.grid` para las líneas
+// de la rejilla. El resto de colores de UI (paneles, overlay, etc.) siguen
+// controlados por el tema claro/oscuro vía CSS, no por la skin.
+const SKIN_STORAGE_KEY = 'tetris-skin';
+
+// Rectángulo con esquinas redondeadas; usa `context.roundRect` cuando está
+// disponible y cae a un trazado manual con `arcTo` si no (navegadores viejos).
+function roundedRectPath(context, x, y, w, h, r) {
+  context.beginPath();
+  if (typeof context.roundRect === 'function') {
+    context.roundRect(x, y, w, h, r);
+    return;
+  }
+  context.moveTo(x + r, y);
+  context.arcTo(x + w, y, x + w, y + h, r);
+  context.arcTo(x + w, y + h, x, y + h, r);
+  context.arcTo(x, y + h, x, y, r);
+  context.arcTo(x, y, x + w, y, r);
+  context.closePath();
+}
+
+const SKINS = {
+  retro: {
+    label: 'Retro',
+    // El aspecto original del juego: colores planos + highlight superior.
+    colors: COLORS,
+    canvasBg: null,
+    gridColor: null,
+    paintCell(context, x, y, size, color) {
+      context.fillStyle = color;
+      context.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
+      context.fillStyle = canvasTheme.highlight;
+      context.fillRect(x * size + 1, y * size + 1, size - 2, 4);
+    },
+  },
+  neon: {
+    label: 'Neón',
+    // Paleta saturada/eléctrica; reutiliza colores parecidos para los
+    // power-ups (no aporta nada distinguirlos más: siguen teniendo su icono
+    // propio encima) pero con más brillo para que casen con el resto.
+    colors: [
+      null,
+      '#00e5ff', '#fff176', '#e040fb', '#69f0ae', '#ff1744',
+      '#7c4dff', '#ff9100', '#b0bec5',
+      '#ff1744', '#ffea00', '#ff4081', '#40c4ff', '#18ffff',
+    ],
+    canvasBg: '#000000', // fondo negro forzado, sin importar el tema claro/oscuro
+    gridColor: 'rgba(0, 229, 255, 0.15)',
+    paintCell(context, x, y, size, color) {
+      context.save();
+      context.shadowBlur = size * 0.6;
+      context.shadowColor = color;
+      context.fillStyle = color;
+      context.fillRect(x * size + 2, y * size + 2, size - 4, size - 4);
+      // restore() limpia shadowBlur/shadowColor: no contamina el resto del render
+      context.restore();
+      context.fillStyle = 'rgba(255,255,255,0.25)';
+      context.fillRect(x * size + 2, y * size + 2, size - 4, 3);
+    },
+  },
+  pastel: {
+    label: 'Pastel',
+    // Misma cantidad de tonos que COLORS pero desaturados/claros.
+    colors: [
+      null,
+      '#a8e6ef', '#fff2b2', '#dcb8e8', '#c3ecc6', '#f7b8b8',
+      '#c9cdf0', '#ffd6a8', '#cfd8dc',
+      '#ffb3b3', '#fff59d', '#f8bbd0', '#b0c4c9', '#b3e5fc',
+    ],
+    canvasBg: null,
+    gridColor: null,
+    paintCell(context, x, y, size, color) {
+      const r = Math.max(3, size * 0.22);
+      roundedRectPath(context, x * size + 2, y * size + 2, size - 4, size - 4, r);
+      context.fillStyle = color;
+      context.fill();
+      roundedRectPath(context, x * size + 2, y * size + 2, size - 4, (size - 4) * 0.4, r);
+      context.fillStyle = 'rgba(255,255,255,0.45)';
+      context.fill();
+    },
+  },
+  pixel: {
+    label: 'Pixel',
+    colors: COLORS,
+    canvasBg: null,
+    gridColor: null,
+    paintCell(context, x, y, size, color) {
+      const px = x * size + 1, py = y * size + 1, s = size - 2;
+      context.fillStyle = color;
+      context.fillRect(px, py, s, s);
+      // Textura 4×4: subcuadrados con ligera variación de tono, tipo sprite 8-bits.
+      const cells = 4;
+      const cellSize = s / cells;
+      for (let r = 0; r < cells; r++) {
+        for (let c = 0; c < cells; c++) {
+          const dark = (r + c) % 2 === 0;
+          context.fillStyle = dark ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.10)';
+          context.fillRect(px + c * cellSize, py + r * cellSize, cellSize, cellSize);
+        }
+      }
+      context.fillStyle = canvasTheme.highlight;
+      context.fillRect(px, py, s, 3);
+    },
+  },
+};
+
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
 const nextCanvas = document.getElementById('next-canvas');
@@ -93,6 +213,7 @@ const overlayTitle = document.getElementById('overlay-title');
 const overlayScore = document.getElementById('overlay-score');
 const restartBtn = document.getElementById('restart-btn');
 const themeToggleBtn = document.getElementById('theme-toggle');
+const skinSelectEl = document.getElementById('skin-select');
 const powerupCountdownEl = document.getElementById('powerup-countdown');
 const powerupHintEl = document.getElementById('powerup-hint');
 const powerupStatusEl = document.getElementById('powerup-status');
@@ -103,6 +224,7 @@ const helpCloseBtn = document.getElementById('help-close');
 let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 let powerupPending, nextPowerupAt, lastPowerup, freezeUntil, freezeRemaining, effects;
 let canvasTheme = CANVAS_THEME_COLORS.dark;
+let currentSkin = 'retro';
 let helpOpen = false, helpPaused = false;
 
 function renderPowerupLegend() {
@@ -130,6 +252,35 @@ function toggleTheme() {
   localStorage.setItem(THEME_STORAGE_KEY, next);
   applyTheme(next);
   if (current) draw();
+}
+
+// Aplica una skin ya validada (cae a 'retro' si el valor no existe, p.ej.
+// datos corruptos en localStorage) y sincroniza el <select>.
+function applySkin(skin) {
+  currentSkin = SKINS[skin] ? skin : 'retro';
+  if (skinSelectEl) skinSelectEl.value = currentSkin;
+}
+
+function loadStoredSkin() {
+  try {
+    return localStorage.getItem(SKIN_STORAGE_KEY);
+  } catch (e) {
+    return null;
+  }
+}
+
+// Cambia de skin EN CALIENTE: actualiza el estado y vuelve a pintar tanto el
+// tablero como la vista previa, sin recargar la página.
+function changeSkin(skin) {
+  try {
+    localStorage.setItem(SKIN_STORAGE_KEY, skin);
+  } catch (e) {
+    // localStorage no disponible (modo privado, cuota, etc.): la skin sigue
+    // aplicándose para esta sesión, solo no persiste.
+  }
+  applySkin(skin);
+  if (current) draw();
+  if (next) drawNext();
 }
 
 function createBoard() {
@@ -423,13 +574,10 @@ function drawBlock(context, x, y, colorIndex, size, alpha) {
   if (!colorIndex) return;
   if (colorIndex === HOLE) { drawHole(context, x, y, size, alpha); return; }
   if (colorIndex === WILD) { drawWild(context, x, y, size, alpha); return; }
-  const color = COLORS[colorIndex];
+  const skin = SKINS[currentSkin];
+  const color = skin.colors[colorIndex] || COLORS[colorIndex];
   context.globalAlpha = alpha ?? 1;
-  context.fillStyle = color;
-  context.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
-  // highlight
-  context.fillStyle = canvasTheme.highlight;
-  context.fillRect(x * size + 1, y * size + 1, size - 2, 4);
+  skin.paintCell(context, x, y, size, color);
   if (colorIndex >= BOMB) drawPowerupIcon(context, x, y, colorIndex, size);
   context.globalAlpha = 1;
 }
@@ -447,10 +595,12 @@ function drawPowerupIcon(context, x, y, colorIndex, size) {
 function drawWild(context, x, y, size, alpha) {
   // Comodín del Tinte: parpadea en dorado y muestra una estrella, para que
   // se distinga a simple vista de un bloque normal del mismo color perdido.
+  // El fondo se pinta con el estilo de la skin activa (glow, redondeado,
+  // textura...) pero el color dorado siempre viene del tema, no de la skin.
+  const skin = SKINS[currentSkin];
   const pulse = 0.6 + 0.4 * Math.sin(performance.now() / 200);
   context.globalAlpha = (alpha ?? 1) * pulse;
-  context.fillStyle = canvasTheme.wild;
-  context.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
+  skin.paintCell(context, x, y, size, canvasTheme.wild);
   context.globalAlpha = alpha ?? 1;
   context.font = `${Math.floor(size * 0.55)}px sans-serif`;
   context.textAlign = 'center';
@@ -461,13 +611,11 @@ function drawWild(context, x, y, size, alpha) {
 }
 
 function drawHole(context, x, y, size, alpha) {
+  const skin = SKINS[currentSkin];
   context.globalAlpha = alpha ?? 1;
-  // fondo metálico de la tuerca, igual que un bloque normal
-  context.fillStyle = COLORS[NUT];
-  context.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
-  context.fillStyle = canvasTheme.highlight;
-  context.fillRect(x * size + 1, y * size + 1, size - 2, 4);
-  // agujero circular central
+  // fondo metálico de la tuerca, con el estilo de pintado de la skin activa
+  skin.paintCell(context, x, y, size, skin.colors[NUT] || COLORS[NUT]);
+  // agujero circular central: colores de tema claro/oscuro, no de la skin
   const cx = x * size + size / 2;
   const cy = y * size + size / 2;
   const radius = size * 0.3;
@@ -482,7 +630,7 @@ function drawHole(context, x, y, size, alpha) {
 }
 
 function drawGrid() {
-  ctx.strokeStyle = canvasTheme.grid;
+  ctx.strokeStyle = SKINS[currentSkin].gridColor || canvasTheme.grid;
   ctx.lineWidth = 0.5;
   for (let c = 1; c < COLS; c++) {
     ctx.beginPath();
@@ -500,6 +648,13 @@ function drawGrid() {
 
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
+  // Algunas skins (p.ej. neon) fuerzan un fondo propio por encima del fondo
+  // CSS del tema, para que su estética no dependa de si el tema es claro u oscuro.
+  const bg = SKINS[currentSkin].canvasBg;
+  if (bg) {
+    ctx.fillStyle = bg;
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+  }
   drawGrid();
 
   // board
@@ -540,6 +695,11 @@ function drawEffects() {
 function drawNext() {
   const NB = 30;
   nextCtx.clearRect(0, 0, nextCanvas.width, nextCanvas.height);
+  const bg = SKINS[currentSkin].canvasBg;
+  if (bg) {
+    nextCtx.fillStyle = bg;
+    nextCtx.fillRect(0, 0, nextCanvas.width, nextCanvas.height);
+  }
   const shape = next.shape;
   const offX = Math.floor((4 - shape[0].length) / 2);
   const offY = Math.floor((4 - shape.length) / 2);
@@ -698,7 +858,17 @@ restartBtn.addEventListener('click', init);
 themeToggleBtn.addEventListener('click', toggleTheme);
 helpToggleBtn.addEventListener('click', toggleHelp);
 helpCloseBtn.addEventListener('click', closeHelp);
+if (skinSelectEl) {
+  skinSelectEl.addEventListener('change', e => {
+    changeSkin(e.target.value);
+    // Sin esto, el <select> se queda con el foco tras elegir una skin y las
+    // flechas del teclado (mover/rotar la pieza) quedarían capturadas por él
+    // en vez de llegar al juego.
+    skinSelectEl.blur();
+  });
+}
 
 applyTheme(localStorage.getItem(THEME_STORAGE_KEY) === 'light' ? 'light' : 'dark');
+applySkin(loadStoredSkin());
 renderPowerupLegend();
 init();
