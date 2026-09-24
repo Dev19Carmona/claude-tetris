@@ -34,10 +34,68 @@
       <div class="board-wrap">
         <canvas id="board" width="300" height="600"></canvas>
 
+        <div id="start-overlay" class="overlay">
+          <div class="overlay-box">
+            <p id="start-title">TETRIS</p>
+            <p class="bests-line" id="start-bests"></p>
+
+            <div class="records">
+              <span class="label">RÉCORDS</span>
+              <table class="records-table" id="start-records-table">
+                <thead>
+                  <tr><th>#</th><th>Nombre</th><th>Puntos</th><th>Líneas</th><th>Combo</th></tr>
+                </thead>
+                <tbody id="start-records-tbody"></tbody>
+              </table>
+            </div>
+
+            <div class="clear-records" id="start-clear-wrap">
+              <button id="start-clear-btn" type="button" class="link-btn">Borrar récords</button>
+              <span id="start-clear-confirm" class="confirm-group hidden">
+                <span>¿Seguro?</span>
+                <button id="start-clear-yes" type="button" class="link-btn confirm-yes">Sí</button>
+                <button id="start-clear-no" type="button" class="link-btn confirm-no">No</button>
+              </span>
+            </div>
+
+            <button id="start-play-btn">Jugar</button>
+          </div>
+        </div>
+
         <div id="overlay" class="overlay hidden">
           <div class="overlay-box">
             <p id="overlay-title">GAME OVER</p>
             <p id="overlay-score"></p>
+
+            <div id="overlay-gameover-extra" class="gameover-extra hidden">
+              <div id="save-score-section" class="save-score hidden">
+                <label for="player-name-input">¡Nuevo récord! Tu nombre:</label>
+                <input id="player-name-input" type="text" maxlength="12" placeholder="Nombre" autocomplete="off" />
+                <button id="save-score-btn" type="button">Guardar</button>
+              </div>
+
+              <p class="bests-line" id="overlay-bests"></p>
+
+              <div class="records">
+                <span class="label">RÉCORDS</span>
+                <table class="records-table" id="overlay-records-table">
+                  <thead>
+                    <tr><th>#</th><th>Nombre</th><th>Puntos</th><th>Líneas</th><th>Combo</th></tr>
+                  </thead>
+                  <tbody id="overlay-records-tbody"></tbody>
+                </table>
+              </div>
+
+              <div class="clear-records" id="overlay-clear-wrap">
+                <button id="overlay-clear-btn" type="button" class="link-btn">Borrar récords</button>
+                <span id="overlay-clear-confirm" class="confirm-group hidden">
+                  <span>¿Seguro?</span>
+                  <button id="overlay-clear-yes" type="button" class="link-btn confirm-yes">Sí</button>
+                  <button id="overlay-clear-no" type="button" class="link-btn confirm-no">No</button>
+                </span>
+              </div>
+            </div>
+
             <button id="restart-btn">Reiniciar</button>
           </div>
         </div>
