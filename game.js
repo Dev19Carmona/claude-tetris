@@ -76,6 +76,9 @@ const PIECES = [
 const LINE_SCORES = [0, 100, 300, 500, 800];
 
 const THEME_STORAGE_KEY = 'tetris-theme';
+const START_LEVEL_STORAGE_KEY = 'tetris-start-level';
+const MIN_START_LEVEL = 1;
+const MAX_START_LEVEL = 10;
 const CANVAS_THEME_COLORS = {
   dark: { grid: '#22222e', highlight: 'rgba(255,255,255,0.12)', hole: '#1a1a25', holeEdge: 'rgba(0,0,0,0.5)', wild: '#ffd700' },
   light: { grid: '#dde0f0', highlight: 'rgba(255,255,255,0.35)', hole: '#ffffff', holeEdge: 'rgba(30,34,60,0.25)', wild: '#e6b800' },
@@ -99,11 +102,23 @@ const powerupStatusEl = document.getElementById('powerup-status');
 const powerupLegendEl = document.getElementById('powerup-legend');
 const helpToggleBtn = document.getElementById('help-toggle');
 const helpCloseBtn = document.getElementById('help-close');
+const pauseMenu = document.getElementById('pause-menu');
+const pauseResumeBtn = document.getElementById('pause-resume-btn');
+const pauseRestartBtn = document.getElementById('pause-restart-btn');
+const pauseControlsBtn = document.getElementById('pause-controls-btn');
+const pauseControlsList = document.getElementById('pause-controls-list');
+const startLevelSelect = document.getElementById('start-level-select');
 
 let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 let powerupPending, nextPowerupAt, lastPowerup, freezeUntil, freezeRemaining, effects;
 let canvasTheme = CANVAS_THEME_COLORS.dark;
 let helpOpen = false, helpPaused = false;
+let pauseMenuOpen = false, startLevel = MIN_START_LEVEL;
+// Tras reanudar, si el sistema operativo estaba repitiendo una tecla que
+// quedó "mantenida" desde antes de pausar, el primer keydown que llega puede
+// venir marcado como repetición (e.repeat). Este guard simple ignora sólo
+// ese primer evento repetido para evitar un movimiento accidental al volver.
+let suppressNextRepeat = false;
 
 function renderPowerupLegend() {
   powerupLegendEl.innerHTML = POWERUP_TYPES
@@ -130,6 +145,49 @@ function toggleTheme() {
   localStorage.setItem(THEME_STORAGE_KEY, next);
   applyTheme(next);
   if (current) draw();
+}
+
+// Nivel inicial elegido en el menú de pausa para la PRÓXIMA partida.
+// localStorage puede fallar (modo privado, cuota, etc.), así que cada acceso
+// va envuelto en try/catch y cae de vuelta al mínimo por defecto.
+function getStoredStartLevel() {
+  try {
+    const raw = localStorage.getItem(START_LEVEL_STORAGE_KEY);
+    const n = parseInt(raw, 10);
+    if (Number.isInteger(n) && n >= MIN_START_LEVEL && n <= MAX_START_LEVEL) return n;
+  } catch (err) {
+    // localStorage no disponible: se usa el valor por defecto
+  }
+  return MIN_START_LEVEL;
+}
+
+function setStoredStartLevel(n) {
+  try {
+    localStorage.setItem(START_LEVEL_STORAGE_KEY, String(n));
+  } catch (err) {
+    // sin persistencia no rompe la partida actual, solo no se recuerda la elección
+  }
+}
+
+function syncStartLevelSelect() {
+  startLevelSelect.value = String(getStoredStartLevel());
+}
+
+// Genera las <option> del selector a partir de MIN_START_LEVEL/MAX_START_LEVEL
+// en vez de dejarlas hardcodeadas en index.html, para que ambos límites vivan
+// en un único sitio.
+function populateStartLevelOptions() {
+  const options = [];
+  for (let n = MIN_START_LEVEL; n <= MAX_START_LEVEL; n++) {
+    options.push(`<option value="${n}">${n}</option>`);
+  }
+  startLevelSelect.innerHTML = options.join('');
+}
+
+// Fórmula única de velocidad de caída según el nivel, usada tanto al iniciar
+// partida como al subir de nivel en clearLines(), para que nunca diverjan.
+function computeDropInterval(lvl) {
+  return Math.max(100, 1000 - (lvl - 1) * 90);
 }
 
 function createBoard() {
@@ -208,8 +266,10 @@ function clearLines() {
   if (cleared) {
     lines += cleared;
     score += (LINE_SCORES[cleared] || 0) * level;
-    level = Math.floor(lines / 10) + 1;
-    dropInterval = Math.max(100, 1000 - (level - 1) * 90);
+    // El nivel nunca baja del nivel inicial elegido en el menú de pausa,
+    // aunque las líneas acumuladas todavía no alcancen ese umbral.
+    level = Math.max(startLevel, Math.floor(lines / 10) + 1);
+    dropInterval = computeDropInterval(level);
     clearWilds();
     if (lines >= nextPowerupAt) {
       powerupPending = true;
@@ -574,6 +634,7 @@ function pauseGame(showOverlay = true) {
 function resumeGame(hideOverlay = true) {
   if (gameOver || !paused) return;
   paused = false;
+  suppressNextRepeat = true; // ver declaración de suppressNextRepeat más arriba
   // Si había un Congelar activo, se reanuda con el tiempo restante en vez
   // de con el timestamp absoluto (que ya habría "vencido" durante la pausa).
   if (freezeRemaining > 0) {
@@ -585,10 +646,44 @@ function resumeGame(hideOverlay = true) {
   loop(lastTime);
 }
 
-function togglePause() {
-  if (gameOver) return;
-  if (paused) resumeGame();
-  else pauseGame();
+// --- Menú de pausa ---------------------------------------------------------
+// Reutiliza pauseGame/resumeGame (con showOverlay/hideOverlay en false) para
+// no tocar el overlay #overlay compartido con GAME OVER; el menú de pausa
+// vive en su propio elemento (#pause-menu).
+
+function openPauseMenu() {
+  if (gameOver || pauseMenuOpen) return;
+  pauseMenuOpen = true;
+  pauseGame(false);
+  syncStartLevelSelect();
+  pauseMenu.classList.remove('hidden');
+}
+
+function closePauseMenu() {
+  if (!pauseMenuOpen) return;
+  pauseMenuOpen = false;
+  pauseMenu.classList.add('hidden');
+}
+
+function resumeFromPauseMenu() {
+  closePauseMenu();
+  resumeGame(false);
+}
+
+function restartFromPauseMenu() {
+  closePauseMenu();
+  init();
+}
+
+function togglePauseMenu() {
+  if (pauseMenuOpen) resumeFromPauseMenu();
+  else openPauseMenu();
+}
+
+function toggleControlsList() {
+  const isHidden = pauseControlsList.classList.toggle('hidden');
+  pauseControlsBtn.setAttribute('aria-expanded', String(!isHidden));
+  pauseControlsBtn.textContent = isHidden ? 'Ver controles' : 'Ocultar controles';
 }
 
 function openHelp() {
@@ -645,10 +740,12 @@ function init() {
   board = createBoard();
   score = 0;
   lines = 0;
-  level = 1;
+  startLevel = getStoredStartLevel();
+  level = startLevel;
   paused = false;
   gameOver = false;
-  dropInterval = 1000;
+  pauseMenuOpen = false;
+  dropInterval = computeDropInterval(level);
   dropAccum = 0;
   lastTime = performance.now();
   powerupPending = false;
@@ -661,16 +758,34 @@ function init() {
   spawn();
   updateHUD();
   overlay.classList.add('hidden');
+  pauseMenu.classList.add('hidden');
   animId = requestAnimationFrame(loop);
 }
 
 document.addEventListener('keydown', e => {
   if (helpOpen) {
+    // Prioridad: si la ayuda está abierta, Escape la cierra a ella primero
+    // (nunca abre/cierra el menú de pausa en el mismo evento).
     if (e.code === 'Escape' || e.code === 'KeyH') closeHelp();
     return;
   }
+  if (e.code === 'KeyP' || e.code === 'Escape') {
+    if (gameOver) return;
+    togglePauseMenu();
+    return;
+  }
+  // Con el menú de pausa abierto se bloquea cualquier otra tecla de juego
+  // (incluida H); el <select> de nivel y los botones del menú manejan sus
+  // propios eventos de forma nativa sin pasar por este switch.
+  if (pauseMenuOpen) return;
   if (e.code === 'KeyH') { openHelp(); return; }
-  if (e.code === 'KeyP') { togglePause(); return; }
+  if (suppressNextRepeat) {
+    // Sigue ignorando repeticiones "fantasma" del SO (de cualquier tecla que
+    // haya quedado mantenida antes de pausar) hasta la primera pulsación
+    // realmente nueva; recién ahí se desactiva el guard.
+    if (e.repeat) return;
+    suppressNextRepeat = false;
+  }
   if (paused || gameOver) return;
   switch (e.code) {
     case 'ArrowLeft':
@@ -698,7 +813,15 @@ restartBtn.addEventListener('click', init);
 themeToggleBtn.addEventListener('click', toggleTheme);
 helpToggleBtn.addEventListener('click', toggleHelp);
 helpCloseBtn.addEventListener('click', closeHelp);
+pauseResumeBtn.addEventListener('click', resumeFromPauseMenu);
+pauseRestartBtn.addEventListener('click', restartFromPauseMenu);
+pauseControlsBtn.addEventListener('click', toggleControlsList);
+startLevelSelect.addEventListener('change', () => {
+  const n = parseInt(startLevelSelect.value, 10);
+  if (Number.isInteger(n) && n >= MIN_START_LEVEL && n <= MAX_START_LEVEL) setStoredStartLevel(n);
+});
 
 applyTheme(localStorage.getItem(THEME_STORAGE_KEY) === 'light' ? 'light' : 'dark');
 renderPowerupLegend();
+populateStartLevelOptions();
 init();

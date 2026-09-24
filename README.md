@@ -17,6 +17,7 @@ Implementación del clásico **Tetris** en JavaScript vanilla, usando HTML5 Canv
     - [Opción 1: abrir el archivo directamente](#opción-1-abrir-el-archivo-directamente)
     - [Opción 2: servidor local (recomendado)](#opción-2-servidor-local-recomendado)
   - [Controles](#controles)
+  - [Menú de pausa](#menú-de-pausa)
   - [Tema claro / oscuro](#tema-claro--oscuro)
   - [Power-ups](#power-ups)
   - [Cómo funciona](#cómo-funciona)
@@ -45,7 +46,7 @@ Es una versión jugable del Tetris clásico con todas las mecánicas que esperar
 - **Sistema de puntuación** clásico de Tetris (100 / 300 / 500 / 800 multiplicado por nivel).
 - **Niveles** que aumentan cada 10 líneas y aceleran la caída.
 - **Power-ups aleatorios**: cada 10 líneas cae una pieza especial (Bomba, Rayo, Tinte, Gravedad o Congelar) que dispara un efecto en vez de fijarse en el tablero.
-- **Pausa** y **Game Over** con opción de reinicio.
+- **Menú de pausa** completo (reanudar, reiniciar, ver controles y elegir el nivel inicial de la próxima partida) y **Game Over** con opción de reinicio.
 
 ---
 
@@ -88,9 +89,38 @@ Después abre `http://localhost:8000` en el navegador.
 | `↑` o `X` | Rotar la pieza en sentido horario |
 | `↓`       | Soft drop (bajar más rápido)      |
 | `Espacio` | Hard drop (caída instantánea)     |
-| `P`       | Pausar / reanudar                 |
+| `P`       | Abrir / cerrar el menú de pausa   |
 | `H`       | Abrir / cerrar la ayuda            |
-| `Esc`     | Cerrar la ayuda                   |
+| `Esc`     | Cierra la ayuda si está abierta; si no, abre/cierra el menú de pausa |
+
+---
+
+## Menú de pausa
+
+Pulsar `P` o `Esc` (con la ayuda cerrada y sin estar en Game Over) abre un menú de pausa propio
+(`#pause-menu` en `index.html`), independiente del overlay de **GAME OVER**. Mientras está abierto,
+todo el input de juego queda bloqueado (mover, rotar, soft/hard drop): solo funcionan los controles
+del propio menú.
+
+El menú ofrece:
+
+- **Reanudar** — cierra el menú y continúa la partida donde se dejó (equivale a `resumeGame()`).
+- **Reiniciar** — llama a `init()` y arranca una partida nueva sin recargar la página.
+- **Ver controles** — despliega/colapsa, dentro del propio menú, la lista de teclas.
+- **Nivel inicial** — un `<select>` (1–10) para elegir con qué nivel arrancará la **próxima** partida.
+  La elección se guarda en `localStorage` bajo la clave `tetris-start-level` (persiste entre sesiones,
+  igual que `tetris-theme`); `init()` la lee y arranca con `level = startLevel`, ajustando
+  `dropInterval` con la misma fórmula que el resto del juego. Al limpiar líneas, el nivel nunca baja
+  de ese valor inicial: `level = Math.max(startLevel, Math.floor(lines / 10) + 1)`.
+
+Al reanudar, un guard simple (`suppressNextRepeat`) ignora los eventos de teclado marcados como
+repetición (`e.repeat`) hasta la primera pulsación realmente nueva, para que una tecla que haya
+quedado "mantenida" por el sistema operativo justo antes de pausar no mueva la pieza por sorpresa
+justo después de reanudar.
+
+`Esc` sigue cerrando primero el panel de ayuda si está abierto; el menú de pausa nunca se abre en el
+mismo evento en el que se cierra la ayuda. Pausar (o abrir el menú) preserva el estado de Congelar
+igual que antes, reutilizando `pauseGame()`/`resumeGame()` internamente.
 
 ---
 
@@ -146,7 +176,9 @@ El juego se compone de tres archivos que cooperan:
 Define la estructura visual:
 
 - Un `<canvas id="board">` de **300 × 600** píxeles donde se renderiza el tablero, envuelto en
-  `.board-wrap` junto con el overlay de **PAUSA** / **GAME OVER**.
+  `.board-wrap` junto con el overlay de **GAME OVER** (`#overlay`) y el del **menú de pausa**
+  (`#pause-menu`, ver [Menú de pausa](#menú-de-pausa)) — son dos overlays independientes que nunca se
+  muestran a la vez.
 - Un **panel izquierdo** de referencia estática (`EFECTOS` y `CONTROLES`), siempre visible en
   pantallas anchas; en ventanas por debajo de 800px se oculta y se abre como modal con el botón ❓
   (o la tecla `H`), pausando la partida mientras está abierto.
@@ -168,9 +200,12 @@ Contiene toda la lógica del juego. A grandes rasgos:
 - **Game loop** (`loop`): basado en `requestAnimationFrame`, acumula el tiempo transcurrido y baja la pieza una fila cuando se supera `dropInterval`.
 - **Limpieza de líneas** (`clearLines`): recorre el tablero de abajo hacia arriba; cada fila completa se elimina y se inserta una vacía en la cima.
 - **Puntuación**: usa la tabla clásica `[0, 100, 300, 500, 800]` multiplicada por el nivel actual; el hard drop suma 2 puntos por celda recorrida y el soft drop 1 punto por fila.
-- **Nivel y velocidad**: el nivel sube cada 10 líneas; la velocidad de caída se calcula como `max(100, 1000 − (level − 1) × 90)` milisegundos.
+- **Nivel y velocidad**: el nivel sube cada 10 líneas (sin bajar nunca del `startLevel` elegido en el
+  menú de pausa); la velocidad de caída se calcula con `computeDropInterval(level)` =
+  `max(100, 1000 − (level − 1) × 90)` milisegundos, usada tanto en `init()` como en `clearLines()`.
 - **Ghost piece** (`ghostY`): proyecta la posición final de la pieza actual hacia abajo y la dibuja con `globalAlpha = 0.2`.
 - **Power-ups** (tipos 9–13, ver sección [Power-ups](#power-ups)): `lockPiece()` comprueba `POWERUP_EFFECTS[current.type]` antes de decidir entre `merge()` (pieza normal) o ejecutar el efecto correspondiente (`bombEffect`, `rayEffect`, `dyeEffect`, `gravityEffect`, `freezeEffect`). El comodín del Tinte usa el centinela `WILD` (`-2`), igual de "sólido" que `HOLE` para `collide`/`clearLines`, y se limpia en `clearWilds()` tras cada línea real.
+- **Menú de pausa** (`openPauseMenu`/`closePauseMenu`/`resumeFromPauseMenu`/`restartFromPauseMenu`/`toggleControlsList`, ver [Menú de pausa](#menú-de-pausa)): reutiliza `pauseGame(false)`/`resumeGame(false)` para pausar sin tocar el overlay de GAME OVER. `getStoredStartLevel`/`setStoredStartLevel` leen y guardan el nivel inicial en `localStorage` (clave `tetris-start-level`), y `populateStartLevelOptions()` genera las `<option>` del `<select>` a partir de `MIN_START_LEVEL`/`MAX_START_LEVEL`.
 
 ### Flujo del juego
 
@@ -234,8 +269,10 @@ Algunos parámetros fáciles de tunear en `game.js`:
 | `POWERUP_EVERY`  | Líneas eliminadas entre power-ups               | `10`                  |
 | `FREEZE_MS`      | Duración del Congelar en ms                     | `5000`                |
 | `POWERUP_SCORES` | Puntos por celda/uso afectado por un power-up   | ver `game.js`         |
+| `MIN_START_LEVEL`/`MAX_START_LEVEL` | Rango del selector de nivel inicial en el menú de pausa | `1` / `10` |
 
 > Si cambias `COLS`, `ROWS` o `BLOCK`, recuerda ajustar también `width` y `height` del `<canvas id="board">` en `index.html` para que coincida (`COLS × BLOCK` × `ROWS × BLOCK`).
+> Si cambias `MIN_START_LEVEL`/`MAX_START_LEVEL`, no hace falta tocar `index.html`: las `<option>` del selector se generan en JS (`populateStartLevelOptions`).
 
 ---
 

@@ -307,6 +307,93 @@ kbd {
   background: var(--restart-hover-bg);
 }
 
+/* ---- Menú de pausa ---- */
+.pause-menu-box {
+  min-width: 220px;
+  padding: 8px 12px;
+}
+
+.pause-menu-title {
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: 4px;
+  color: var(--overlay-score-color);
+}
+
+.pause-menu-actions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.pause-menu-actions button {
+  background: var(--toggle-bg);
+  color: var(--toggle-text);
+  border: 1px solid var(--toggle-border);
+  border-radius: 6px;
+  padding: 10px 20px;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.pause-menu-actions button:hover {
+  background: var(--toggle-hover-bg);
+}
+
+#pause-resume-btn {
+  background: var(--restart-bg);
+  color: var(--restart-text);
+  border-color: transparent;
+}
+
+#pause-resume-btn:hover {
+  background: var(--restart-hover-bg);
+}
+
+.pause-controls-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--controls-text);
+  width: 100%;
+}
+
+.pause-controls-list.hidden {
+  display: none;
+}
+
+.pause-controls-list li {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.pause-level-select {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: 100%;
+  font-size: 11px;
+  color: var(--label-color);
+  letter-spacing: 0.5px;
+}
+
+.pause-level-select select {
+  background: var(--kbd-bg);
+  color: var(--kbd-text);
+  border: 1px solid var(--kbd-border);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 13px;
+  font-family: inherit;
+}
+
 /* ---- Layout estrecho: la referencia se convierte en modal ---- */
 @media (max-width: 800px) {
   .panel-left {
