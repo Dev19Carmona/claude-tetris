@@ -256,8 +256,13 @@ function toggleTheme() {
 
 // Aplica una skin ya validada (cae a 'retro' si el valor no existe, p.ej.
 // datos corruptos en localStorage) y sincroniza el <select>.
+// Usa hasOwnProperty en vez de `SKINS[skin]` a secas: SKINS es un objeto
+// literal y por tanto hereda de Object.prototype, así que un valor como
+// 'toString' o 'constructor' (localStorage manipulado a mano, o una clave
+// corrupta) resolvería a una función heredada (truthy) en vez de caer a
+// 'retro', rompiendo drawBlock/drawHole/drawWild al no tener `.colors`/`.paintCell`.
 function applySkin(skin) {
-  currentSkin = SKINS[skin] ? skin : 'retro';
+  currentSkin = Object.prototype.hasOwnProperty.call(SKINS, skin) ? skin : 'retro';
   if (skinSelectEl) skinSelectEl.value = currentSkin;
 }
 
@@ -646,15 +651,20 @@ function drawGrid() {
   }
 }
 
+// Algunas skins (p.ej. neon) fuerzan un fondo propio por encima del fondo
+// CSS del tema, para que su estética no dependa de si el tema es claro u
+// oscuro. Compartida por draw() y drawNext() para no repetir el mismo
+// fillRect condicional en cada canvas.
+function paintSkinCanvasBg(context, w, h) {
+  const bg = SKINS[currentSkin].canvasBg;
+  if (!bg) return;
+  context.fillStyle = bg;
+  context.fillRect(0, 0, w, h);
+}
+
 function draw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  // Algunas skins (p.ej. neon) fuerzan un fondo propio por encima del fondo
-  // CSS del tema, para que su estética no dependa de si el tema es claro u oscuro.
-  const bg = SKINS[currentSkin].canvasBg;
-  if (bg) {
-    ctx.fillStyle = bg;
-    ctx.fillRect(0, 0, canvas.width, canvas.height);
-  }
+  paintSkinCanvasBg(ctx, canvas.width, canvas.height);
   drawGrid();
 
   // board
@@ -695,11 +705,7 @@ function drawEffects() {
 function drawNext() {
   const NB = 30;
   nextCtx.clearRect(0, 0, nextCanvas.width, nextCanvas.height);
-  const bg = SKINS[currentSkin].canvasBg;
-  if (bg) {
-    nextCtx.fillStyle = bg;
-    nextCtx.fillRect(0, 0, nextCanvas.width, nextCanvas.height);
-  }
+  paintSkinCanvasBg(nextCtx, nextCanvas.width, nextCanvas.height);
   const shape = next.shape;
   const offX = Math.floor((4 - shape[0].length) / 2);
   const offY = Math.floor((4 - shape.length) / 2);
