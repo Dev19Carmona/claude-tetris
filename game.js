@@ -279,6 +279,15 @@ function clearRecords() {
   renderBestsLine(startBestsEl);
   renderRecordsTable(overlayRecordsTbody, -1);
   renderBestsLine(overlayBestsEl);
+  // Si la puntuación de la partida actual ya se había guardado ("Guardado
+  // ✓") y ahora se borran los récords, esa entrada deja de existir: se
+  // vuelve a habilitar "Guardar" para no dejar la UI contradiciendo la
+  // tabla (que ahora aparece vacía).
+  if (gameOver && saveScoreBtn.disabled) {
+    saveScoreSection.classList.remove('hidden');
+    saveScoreBtn.disabled = false;
+    saveScoreBtn.textContent = 'Guardar';
+  }
 }
 
 // Botón "Borrar récords" con confirmación inline (¿Seguro? / Sí / No), sin
@@ -440,9 +449,14 @@ function lockPiece() {
   } else {
     merge();
   }
-  // Si la pieza se fija sin limpiar ninguna línea, se rompe el combo.
+  // Si una pieza NORMAL se fija sin limpiar ninguna línea, se rompe el
+  // combo. Las piezas de power-up son automáticas (el jugador no elige que
+  // caigan) y no fijan bloques por sí mismas, así que no deben romper una
+  // racha por no limpiar líneas directamente; si de rebote sí limpian
+  // alguna (p. ej. Gravedad dejando una fila completa), clearLines() ya
+  // suma esa limpieza al combo igual que cualquier otra.
   const cleared = clearLines();
-  if (cleared === 0) combo = 0;
+  if (!effect && cleared === 0) combo = 0;
   spawn();
 }
 
