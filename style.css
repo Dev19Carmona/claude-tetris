@@ -29,6 +29,9 @@
   --toggle-hover-bg: #2a2a45;
   --grid-line: #22222e;
   --block-highlight: rgba(255, 255, 255, 0.12);
+  --board-w: 300px;
+  --board-h: 600px;
+  --panel-w: 168px;
 }
 
 :root[data-theme="light"] {
@@ -74,6 +77,11 @@ body {
   position: relative;
 }
 
+.board-wrap {
+  position: relative;
+  width: var(--board-w);
+}
+
 .game-title {
   text-align: center;
   font-size: 32px;
@@ -99,11 +107,22 @@ body {
 
 /* ---- Panel lateral ---- */
 .panel {
-  width: 160px;
+  width: var(--panel-w);
+  max-height: var(--board-h);
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 14px;
   padding-top: 4px;
+}
+
+.panel-right {
+  min-height: var(--board-h);
+}
+
+.panel-actions {
+  margin-top: auto;
+  display: flex;
+  gap: 8px;
 }
 
 .panel-section {
@@ -134,22 +153,77 @@ body {
   border-radius: 4px;
 }
 
-/* ---- Toggle de tema ---- */
-#theme-toggle {
+/* ---- Power-ups ---- */
+.value.small {
+  font-size: 14px;
+  letter-spacing: 0;
+}
+
+.powerup-hint {
+  font-size: 12px;
+  color: var(--value-color);
+  min-height: 14px;
+}
+
+.powerup-status {
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--overlay-title-color);
+  min-height: 14px;
+}
+
+.legend ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.legend li {
+  display: grid;
+  grid-template-columns: 18px 1fr;
+  gap: 6px;
+  font-size: 11px;
+  color: var(--controls-text);
+  line-height: 1.35;
+  padding: 3px 4px;
+  border-radius: 4px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.legend li .icon {
+  text-align: center;
+}
+
+.legend li.is-next {
+  color: var(--value-color);
+  background: var(--toggle-bg);
+}
+
+/* ---- Botones de icono (tema / ayuda) ---- */
+.icon-btn {
   background: var(--toggle-bg);
   border: 1px solid var(--toggle-border);
   color: var(--toggle-text);
   border-radius: 6px;
-  padding: 8px 10px;
-  font-size: 13px;
-  font-weight: 600;
+  width: 34px;
+  height: 34px;
+  font-size: 16px;
+  line-height: 1;
   cursor: pointer;
-  letter-spacing: 0.5px;
   transition: background 0.15s;
 }
 
-#theme-toggle:hover {
+.icon-btn:hover {
   background: var(--toggle-hover-bg);
+}
+
+#help-toggle {
+  display: none;
+}
+
+#help-close {
+  display: none;
 }
 
 /* ---- Controles ---- */
@@ -231,4 +305,52 @@ kbd {
 
 #restart-btn:hover {
   background: var(--restart-hover-bg);
+}
+
+/* ---- Layout estrecho: la referencia se convierte en modal ---- */
+@media (max-width: 800px) {
+  .panel-left {
+    display: none;
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 220px;
+    max-height: 80vh;
+    overflow-y: auto;
+    z-index: 10;
+    background: var(--board-bg);
+    border: 1px solid var(--board-border);
+    border-radius: 8px;
+    padding: 16px;
+    box-shadow: 0 0 40px var(--board-shadow);
+  }
+
+  #help-toggle {
+    display: inline-block;
+  }
+
+  #help-close {
+    display: block;
+    margin-left: auto;
+    margin-bottom: 8px;
+    background: transparent;
+    border: none;
+    color: var(--controls-text);
+    font-size: 14px;
+    cursor: pointer;
+  }
+
+  body.help-open .panel-left {
+    display: flex;
+    flex-direction: column;
+  }
+}
+
+/* ---- Pantallas bajas: reducir el título para evitar scroll vertical ---- */
+@media (max-height: 740px) {
+  .game-title {
+    font-size: 22px;
+    margin-bottom: 8px;
+  }
 }

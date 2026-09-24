@@ -4,6 +4,41 @@ const COLS = 10;
 const ROWS = 20;
 const BLOCK = 30;
 
+// HOLE marca el agujero central de la tuerca: ocupa espacio (colisiona,
+// se funde con el tablero) pero no es un bloque de color pintable.
+const HOLE = -1;
+const NUT = 8;
+
+// Power-ups: tipos de pieza 9-13. Nunca se fusionan en el tablero (ver
+// lockPiece); en su lugar disparan un efecto y la pieza "desaparece".
+const BOMB = 9;
+const RAY = 10;
+const DYE = 11;
+const GRAVITY = 12;
+const FREEZE = 13;
+const NORMAL_PIECES = 8; // 1..8 son piezas normales; randomPiece() no debe pasar de aquí
+
+// WILD marca un bloque convertido en comodín por el Tinte: colisiona y
+// cuenta como celda llena (igual que HOLE) pero se borra al limpiar una
+// línea, en vez de fundirse permanentemente.
+const WILD = -2;
+
+const POWERUP_EVERY = 10; // cada cuántas líneas aparece un power-up en NEXT
+const FREEZE_MS = 5000;
+
+const POWERUP_TYPES = [BOMB, RAY, DYE, GRAVITY, FREEZE];
+
+const POWERUP_INFO = {
+  [BOMB]: { icon: '💣', name: 'Bomba', desc: 'destruye un área 3×3' },
+  [RAY]: { icon: '⚡', name: 'Rayo', desc: 'limpia fila/columna (rota con ↑)' },
+  [DYE]: { icon: '🎨', name: 'Tinte', desc: 'convierte un color en comodines' },
+  [GRAVITY]: { icon: '⬇️', name: 'Gravedad', desc: 'compacta los huecos' },
+  [FREEZE]: { icon: '❄️', name: 'Congelar', desc: 'pausa la caída 5s' },
+};
+
+// Puntos por celda afectada (o por uso, en Gravedad/Congelar), × level.
+const POWERUP_SCORES = { cell: 20, wild: 15, gravity: 100, freeze: 50 };
+
 const COLORS = [
   null,
   '#4dd0e1', // I - cyan
@@ -13,6 +48,12 @@ const COLORS = [
   '#e57373', // Z - red
   '#9fa8da', // J - pale indigo
   '#ffb74d', // L - orange
+  '#90a4ae', // Tuerca - gris metálico
+  '#ff5252', // Bomba - rojo intenso
+  '#ffee58', // Rayo - amarillo eléctrico
+  '#f06292', // Tinte - rosa
+  '#78909c', // Gravedad - gris azulado
+  '#4fc3f7', // Congelar - celeste hielo
 ];
 
 const PIECES = [
@@ -24,14 +65,20 @@ const PIECES = [
   [[5,5,0],[0,5,5],[0,0,0]],                  // Z
   [[6,0,0],[6,6,6],[0,0,0]],                  // J
   [[0,0,7],[7,7,7],[0,0,0]],                  // L
+  [[NUT,NUT,NUT],[NUT,HOLE,NUT],[NUT,NUT,NUT]], // Tuerca (3x3 con agujero)
+  [[BOMB]],                                    // Bomba (1x1)
+  [[RAY,RAY],[0,0]],                          // Rayo (2 celdas; rotar cambia fila<->columna)
+  [[DYE]],                                     // Tinte (1x1)
+  [[GRAVITY]],                                 // Gravedad (1x1)
+  [[FREEZE]],                                  // Congelar (1x1)
 ];
 
 const LINE_SCORES = [0, 100, 300, 500, 800];
 
 const THEME_STORAGE_KEY = 'tetris-theme';
 const CANVAS_THEME_COLORS = {
-  dark: { grid: '#22222e', highlight: 'rgba(255,255,255,0.12)' },
-  light: { grid: '#dde0f0', highlight: 'rgba(255,255,255,0.35)' },
+  dark: { grid: '#22222e', highlight: 'rgba(255,255,255,0.12)', hole: '#1a1a25', holeEdge: 'rgba(0,0,0,0.5)', wild: '#ffd700' },
+  light: { grid: '#dde0f0', highlight: 'rgba(255,255,255,0.35)', hole: '#ffffff', holeEdge: 'rgba(30,34,60,0.25)', wild: '#e6b800' },
 };
 
 const canvas = document.getElementById('board');
@@ -46,15 +93,35 @@ const overlayTitle = document.getElementById('overlay-title');
 const overlayScore = document.getElementById('overlay-score');
 const restartBtn = document.getElementById('restart-btn');
 const themeToggleBtn = document.getElementById('theme-toggle');
+const powerupCountdownEl = document.getElementById('powerup-countdown');
+const powerupHintEl = document.getElementById('powerup-hint');
+const powerupStatusEl = document.getElementById('powerup-status');
+const powerupLegendEl = document.getElementById('powerup-legend');
+const helpToggleBtn = document.getElementById('help-toggle');
+const helpCloseBtn = document.getElementById('help-close');
 
 let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
+let powerupPending, nextPowerupAt, lastPowerup, freezeUntil, freezeRemaining, effects;
 let canvasTheme = CANVAS_THEME_COLORS.dark;
+let helpOpen = false, helpPaused = false;
+
+function renderPowerupLegend() {
+  powerupLegendEl.innerHTML = POWERUP_TYPES
+    .map(type => {
+      const info = POWERUP_INFO[type];
+      return `<li data-type="${type}"><span class="icon">${info.icon}</span><span>${info.name} — ${info.desc}</span></li>`;
+    })
+    .join('');
+}
 
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
   canvasTheme = CANVAS_THEME_COLORS[theme] || CANVAS_THEME_COLORS.dark;
   const isLight = theme === 'light';
-  themeToggleBtn.textContent = isLight ? '☀️ Claro' : '🌙 Oscuro';
+  themeToggleBtn.textContent = isLight ? '☀️' : '🌙';
+  const label = isLight ? 'Tema claro' : 'Tema oscuro';
+  themeToggleBtn.title = label;
+  themeToggleBtn.setAttribute('aria-label', label);
   themeToggleBtn.setAttribute('aria-pressed', String(isLight));
 }
 
@@ -70,7 +137,19 @@ function createBoard() {
 }
 
 function randomPiece() {
-  const type = Math.floor(Math.random() * 7) + 1;
+  if (powerupPending) {
+    powerupPending = false;
+    return makePowerupPiece();
+  }
+  const type = Math.floor(Math.random() * NORMAL_PIECES) + 1;
+  const shape = PIECES[type].map(row => [...row]);
+  return { type, shape, x: Math.floor(COLS / 2) - Math.floor(shape[0].length / 2), y: 0 };
+}
+
+function makePowerupPiece() {
+  const choices = POWERUP_TYPES.filter(t => t !== lastPowerup);
+  const type = choices[Math.floor(Math.random() * choices.length)];
+  lastPowerup = type;
   const shape = PIECES[type].map(row => [...row]);
   return { type, shape, x: Math.floor(COLS / 2) - Math.floor(shape[0].length / 2), y: 0 };
 }
@@ -131,8 +210,21 @@ function clearLines() {
     score += (LINE_SCORES[cleared] || 0) * level;
     level = Math.floor(lines / 10) + 1;
     dropInterval = Math.max(100, 1000 - (level - 1) * 90);
+    clearWilds();
+    if (lines >= nextPowerupAt) {
+      powerupPending = true;
+      nextPowerupAt = Math.floor(lines / POWERUP_EVERY) * POWERUP_EVERY + POWERUP_EVERY;
+    }
     updateHUD();
   }
+}
+
+// Borra todos los comodines del Tinte (WILD) cuando se completa una línea
+// real. Es el "combo diferido": el Tinte no destruye nada por sí solo.
+function clearWilds() {
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++)
+      if (board[r][c] === WILD) board[r][c] = 0;
 }
 
 function ghostY() {
@@ -162,10 +254,133 @@ function softDrop() {
 
 function lockPiece() {
   if (gameOver) return;
-  merge();
+  const effect = POWERUP_EFFECTS[current.type];
+  if (effect) {
+    // Los power-ups no se fusionan con el tablero: disparan su efecto y
+    // desaparecen. clearLines() se llama igualmente porque Gravedad/Rayo
+    // pueden dejar filas completas.
+    effect(current);
+  } else {
+    merge();
+  }
   clearLines();
   spawn();
 }
+
+// --- Efectos de power-ups -------------------------------------------------
+// Cada función recibe la pieza (1x1, salvo el Rayo) ya en su posición final
+// y devuelve nada; suman directamente a `score` y registran un flash visual.
+
+function flashCells(cells, color) {
+  if (!cells.length) return;
+  effects.push({ cells, color, until: performance.now() + 350 });
+}
+
+function bombEffect(piece) {
+  const cx = piece.x, cy = piece.y;
+  const cells = [];
+  for (let dy = -1; dy <= 1; dy++) {
+    for (let dx = -1; dx <= 1; dx++) {
+      const r = cy + dy, c = cx + dx;
+      if (r < 0 || r >= ROWS || c < 0 || c >= COLS) continue;
+      if (board[r][c] !== 0) {
+        board[r][c] = 0;
+        cells.push({ r, c });
+      }
+    }
+  }
+  score += cells.length * POWERUP_SCORES.cell * level;
+  flashCells(cells, COLORS[BOMB]);
+}
+
+function rayIsHorizontal(shape) {
+  return shape.some(row => row.filter(v => v === RAY).length >= 2);
+}
+
+function rayEffect(piece) {
+  const horizontal = rayIsHorizontal(piece.shape);
+  const cells = [];
+  if (horizontal) {
+    let landedRow = -1;
+    for (let r = 0; r < piece.shape.length && landedRow < 0; r++)
+      for (let c = 0; c < piece.shape[r].length; c++)
+        if (piece.shape[r][c] === RAY) { landedRow = piece.y + r; break; }
+    if (landedRow >= 0 && landedRow < ROWS) {
+      for (let c = 0; c < COLS; c++)
+        if (board[landedRow][c] !== 0) cells.push({ r: landedRow, c });
+      board.splice(landedRow, 1);
+      board.unshift(new Array(COLS).fill(0));
+    }
+  } else {
+    let landedCol = -1;
+    for (let r = 0; r < piece.shape.length && landedCol < 0; r++)
+      for (let c = 0; c < piece.shape[r].length; c++)
+        if (piece.shape[r][c] === RAY) { landedCol = piece.x + c; break; }
+    if (landedCol >= 0 && landedCol < COLS) {
+      for (let r = 0; r < ROWS; r++) {
+        if (board[r][landedCol] !== 0) {
+          cells.push({ r, c: landedCol });
+          board[r][landedCol] = 0;
+        }
+      }
+    }
+  }
+  score += cells.length * POWERUP_SCORES.cell * level;
+  flashCells(cells, COLORS[RAY]);
+}
+
+function dyeEffect() {
+  const counts = new Array(NORMAL_PIECES + 1).fill(0);
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++) {
+      const v = board[r][c];
+      if (v >= 1 && v <= NORMAL_PIECES) counts[v]++;
+    }
+  let bestColor = 0, bestCount = 0;
+  for (let i = 1; i <= NORMAL_PIECES; i++)
+    if (counts[i] > bestCount) { bestCount = counts[i]; bestColor = i; }
+  if (!bestColor) return; // tablero vacío: nada que teñir
+
+  const cells = [];
+  for (let r = 0; r < ROWS; r++)
+    for (let c = 0; c < COLS; c++) {
+      if (board[r][c] === bestColor) {
+        board[r][c] = WILD;
+        cells.push({ r, c });
+      } else if (bestColor === NUT && board[r][c] === HOLE) {
+        // El color mayoritario es la tuerca: su agujero también se tiñe.
+        board[r][c] = WILD;
+        cells.push({ r, c });
+      }
+    }
+  score += cells.length * POWERUP_SCORES.wild * level;
+  flashCells(cells, canvasTheme.wild);
+}
+
+function gravityEffect() {
+  for (let c = 0; c < COLS; c++) {
+    const colVals = [];
+    for (let r = 0; r < ROWS; r++)
+      if (board[r][c] !== 0) colVals.push(board[r][c]);
+    for (let r = 0; r < ROWS; r++) board[r][c] = 0;
+    const startRow = ROWS - colVals.length;
+    for (let i = 0; i < colVals.length; i++) board[startRow + i][c] = colVals[i];
+  }
+  score += POWERUP_SCORES.gravity * level;
+}
+
+function freezeEffect() {
+  freezeUntil = performance.now() + FREEZE_MS;
+  score += POWERUP_SCORES.freeze * level;
+}
+
+const POWERUP_EFFECTS = {
+  [BOMB]: bombEffect,
+  [RAY]: rayEffect,
+  [DYE]: dyeEffect,
+  [GRAVITY]: gravityEffect,
+  [FREEZE]: freezeEffect,
+};
 
 function spawn() {
   current = next;
@@ -181,10 +396,33 @@ function updateHUD() {
   scoreEl.textContent = score.toLocaleString();
   linesEl.textContent = lines;
   levelEl.textContent = level;
+  updatePowerupHUD();
+}
+
+function updatePowerupHUD() {
+  const remaining = Math.max(0, nextPowerupAt - lines);
+  powerupCountdownEl.textContent = remaining === 0 ? '¡ya viene!' : `en ${remaining} línea${remaining === 1 ? '' : 's'}`;
+
+  const nextInfo = next && POWERUP_INFO[next.type];
+  powerupHintEl.textContent = nextInfo ? `${nextInfo.icon} ${nextInfo.name.toUpperCase()}` : '';
+
+  const nextType = next && POWERUP_INFO[next.type] ? next.type : null;
+  for (const li of powerupLegendEl.children) {
+    li.classList.toggle('is-next', Number(li.dataset.type) === nextType);
+  }
+
+  if (freezeUntil > performance.now()) {
+    const secs = Math.ceil((freezeUntil - performance.now()) / 1000);
+    powerupStatusEl.textContent = `❄️ CONGELADO ${secs}s`;
+  } else {
+    powerupStatusEl.textContent = '';
+  }
 }
 
 function drawBlock(context, x, y, colorIndex, size, alpha) {
   if (!colorIndex) return;
+  if (colorIndex === HOLE) { drawHole(context, x, y, size, alpha); return; }
+  if (colorIndex === WILD) { drawWild(context, x, y, size, alpha); return; }
   const color = COLORS[colorIndex];
   context.globalAlpha = alpha ?? 1;
   context.fillStyle = color;
@@ -192,6 +430,54 @@ function drawBlock(context, x, y, colorIndex, size, alpha) {
   // highlight
   context.fillStyle = canvasTheme.highlight;
   context.fillRect(x * size + 1, y * size + 1, size - 2, 4);
+  if (colorIndex >= BOMB) drawPowerupIcon(context, x, y, colorIndex, size);
+  context.globalAlpha = 1;
+}
+
+function drawPowerupIcon(context, x, y, colorIndex, size) {
+  const info = POWERUP_INFO[colorIndex];
+  if (!info) return;
+  context.font = `${Math.floor(size * 0.6)}px sans-serif`;
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.fillStyle = '#ffffff';
+  context.fillText(info.icon, x * size + size / 2, y * size + size / 2 + 1);
+}
+
+function drawWild(context, x, y, size, alpha) {
+  // Comodín del Tinte: parpadea en dorado y muestra una estrella, para que
+  // se distinga a simple vista de un bloque normal del mismo color perdido.
+  const pulse = 0.6 + 0.4 * Math.sin(performance.now() / 200);
+  context.globalAlpha = (alpha ?? 1) * pulse;
+  context.fillStyle = canvasTheme.wild;
+  context.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
+  context.globalAlpha = alpha ?? 1;
+  context.font = `${Math.floor(size * 0.55)}px sans-serif`;
+  context.textAlign = 'center';
+  context.textBaseline = 'middle';
+  context.fillStyle = '#fff';
+  context.fillText('★', x * size + size / 2, y * size + size / 2 + 1);
+  context.globalAlpha = 1;
+}
+
+function drawHole(context, x, y, size, alpha) {
+  context.globalAlpha = alpha ?? 1;
+  // fondo metálico de la tuerca, igual que un bloque normal
+  context.fillStyle = COLORS[NUT];
+  context.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
+  context.fillStyle = canvasTheme.highlight;
+  context.fillRect(x * size + 1, y * size + 1, size - 2, 4);
+  // agujero circular central
+  const cx = x * size + size / 2;
+  const cy = y * size + size / 2;
+  const radius = size * 0.3;
+  context.beginPath();
+  context.arc(cx, cy, radius, 0, Math.PI * 2);
+  context.fillStyle = canvasTheme.hole;
+  context.fill();
+  context.strokeStyle = canvasTheme.holeEdge;
+  context.lineWidth = 1;
+  context.stroke();
   context.globalAlpha = 1;
 }
 
@@ -232,6 +518,23 @@ function draw() {
   for (let r = 0; r < current.shape.length; r++)
     for (let c = 0; c < current.shape[r].length; c++)
       drawBlock(ctx, current.x + c, current.y + r, current.shape[r][c], BLOCK);
+
+  drawEffects();
+}
+
+// Flash momentáneo (350ms) sobre las celdas que acaba de afectar un
+// power-up (Bomba, Rayo, Tinte). Se pinta encima de todo lo demás.
+function drawEffects() {
+  const now = performance.now();
+  effects = effects.filter(e => e.until > now);
+  for (const e of effects) {
+    const alpha = Math.max(0, (e.until - now) / 350) * 0.6;
+    if (alpha <= 0) continue;
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = e.color;
+    for (const { r, c } of e.cells) ctx.fillRect(c * BLOCK, r * BLOCK, BLOCK, BLOCK);
+  }
+  ctx.globalAlpha = 1;
 }
 
 function drawNext() {
@@ -256,33 +559,83 @@ function endGame() {
   overlay.classList.remove('hidden');
 }
 
-function togglePause() {
-  if (gameOver) return;
-  paused = !paused;
-  if (!paused) {
-    lastTime = performance.now();
-    loop(lastTime);
-  } else {
-    cancelAnimationFrame(animId);
+function pauseGame(showOverlay = true) {
+  if (gameOver || paused) return;
+  paused = true;
+  freezeRemaining = freezeUntil > performance.now() ? freezeUntil - performance.now() : 0;
+  cancelAnimationFrame(animId);
+  if (showOverlay) {
     overlayTitle.textContent = 'PAUSA';
     overlayScore.textContent = '';
     overlay.classList.remove('hidden');
   }
 }
 
+function resumeGame(hideOverlay = true) {
+  if (gameOver || !paused) return;
+  paused = false;
+  // Si había un Congelar activo, se reanuda con el tiempo restante en vez
+  // de con el timestamp absoluto (que ya habría "vencido" durante la pausa).
+  if (freezeRemaining > 0) {
+    freezeUntil = performance.now() + freezeRemaining;
+    freezeRemaining = 0;
+  }
+  if (hideOverlay) overlay.classList.add('hidden');
+  lastTime = performance.now();
+  loop(lastTime);
+}
+
+function togglePause() {
+  if (gameOver) return;
+  if (paused) resumeGame();
+  else pauseGame();
+}
+
+function openHelp() {
+  if (helpOpen) return;
+  helpOpen = true;
+  document.body.classList.add('help-open');
+  helpToggleBtn.setAttribute('aria-expanded', 'true');
+  if (!gameOver && !paused) {
+    helpPaused = true;
+    pauseGame(false);
+  }
+}
+
+function closeHelp() {
+  if (!helpOpen) return;
+  helpOpen = false;
+  document.body.classList.remove('help-open');
+  helpToggleBtn.setAttribute('aria-expanded', 'false');
+  if (helpPaused) {
+    helpPaused = false;
+    resumeGame(false);
+  }
+}
+
+function toggleHelp() {
+  if (helpOpen) closeHelp();
+  else openHelp();
+}
+
 function loop(ts) {
   const dt = ts - lastTime;
   lastTime = ts;
-  dropAccum += dt;
-  if (dropAccum >= dropInterval) {
-    dropAccum = 0;
-    if (!collide(current.shape, current.x, current.y + 1)) {
-      current.y++;
-    } else {
-      lockPiece();
+  if (ts < freezeUntil) {
+    dropAccum = 0; // Congelar: la caída no acumula tiempo
+  } else {
+    dropAccum += dt;
+    if (dropAccum >= dropInterval) {
+      dropAccum = 0;
+      if (!collide(current.shape, current.x, current.y + 1)) {
+        current.y++;
+      } else {
+        lockPiece();
+      }
     }
   }
   draw();
+  updatePowerupHUD();
   if (gameOver || paused) return; // fin del bucle: no se reprograma
   animId = requestAnimationFrame(loop);
 }
@@ -298,6 +651,12 @@ function init() {
   dropInterval = 1000;
   dropAccum = 0;
   lastTime = performance.now();
+  powerupPending = false;
+  nextPowerupAt = POWERUP_EVERY;
+  lastPowerup = null;
+  freezeUntil = 0;
+  freezeRemaining = 0;
+  effects = [];
   next = randomPiece();
   spawn();
   updateHUD();
@@ -306,6 +665,11 @@ function init() {
 }
 
 document.addEventListener('keydown', e => {
+  if (helpOpen) {
+    if (e.code === 'Escape' || e.code === 'KeyH') closeHelp();
+    return;
+  }
+  if (e.code === 'KeyH') { openHelp(); return; }
   if (e.code === 'KeyP') { togglePause(); return; }
   if (paused || gameOver) return;
   switch (e.code) {
@@ -332,6 +696,9 @@ document.addEventListener('keydown', e => {
 
 restartBtn.addEventListener('click', init);
 themeToggleBtn.addEventListener('click', toggleTheme);
+helpToggleBtn.addEventListener('click', toggleHelp);
+helpCloseBtn.addEventListener('click', closeHelp);
 
 applyTheme(localStorage.getItem(THEME_STORAGE_KEY) === 'light' ? 'light' : 'dark');
+renderPowerupLegend();
 init();
