@@ -365,6 +365,21 @@ body {
   background: var(--toggle-hover-bg);
 }
 
+.skin-select {
+  background: var(--toggle-bg);
+  border: 1px solid var(--toggle-border);
+  color: var(--toggle-text);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+}
+
+.skin-select:hover {
+  background: var(--toggle-hover-bg);
+}
+
 #help-toggle {
   display: none;
 }
