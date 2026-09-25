@@ -18,6 +18,7 @@ Implementación del clásico **Tetris** en JavaScript vanilla, usando HTML5 Canv
     - [Opción 2: servidor local (recomendado)](#opción-2-servidor-local-recomendado)
   - [Controles](#controles)
   - [Tema claro / oscuro](#tema-claro--oscuro)
+  - [Skins visuales](#skins-visuales)
   - [Power-ups](#power-ups)
   - [Cómo funciona](#cómo-funciona)
     - [1. `index.html`](#1-indexhtml)
@@ -104,6 +105,21 @@ El icono 🌙/☀️ al pie del panel derecho alterna entre modo oscuro (por def
 
 ---
 
+## Skins visuales
+
+El selector `SKIN` del panel derecho cambia la apariencia completa de los bloques (tablero y vista previa), sin recargar la página. La preferencia se guarda en `localStorage` (clave `tetris-skin`) y es independiente del tema claro/oscuro.
+
+| Skin          | Estilo                                                                                          |
+| ------------- | ------------------------------------------------------------------------------------------------ |
+| **Retro**     | Bloques cuadrados y colores planos — la estética original del juego.                             |
+| **Neon**      | Fondo del tablero forzado a negro y bloques con brillo (`shadowBlur` de Canvas) sobre paleta neón. |
+| **Pastel**    | Colores suaves y esquinas redondeadas (simuladas con `arcTo`).                                    |
+| **Pixel Art** | Patrón de textura tipo dithering (cuadrícula 4×4 con sombreado) dibujado sobre cada bloque.        |
+
+Cada skin se define en `SKINS` (`game.js`) con dos piezas: una `palette` (misma indexación que `COLORS`, una entrada por tipo de pieza y power-up) y un `style` que selecciona la función de dibujo (`drawRetroBlock`, `drawNeonBlock`, `drawPastelBlock` o `drawPixelBlock`) dentro de `drawBlock()`. Cambiar de skin solo actualiza `currentSkin` y vuelve a dibujar (`draw()`/`drawNext()`); no reinicia la partida.
+
+---
+
 ## Power-ups
 
 Cada **10 líneas** eliminadas (contador `POWERUP_EVERY` en `game.js`) la siguiente pieza especial se
@@ -151,7 +167,7 @@ Define la estructura visual:
   pantallas anchas; en ventanas por debajo de 800px se oculta y se abre como modal con el botón ❓
   (o la tecla `H`), pausando la partida mientras está abierto.
 - Un **panel derecho** con el estado vivo de la partida: `SCORE`, `LINES`, `LEVEL`, la vista previa
-  `NEXT`, el contador de `POWER-UP` y, al pie, los botones de icono de tema y ayuda.
+  `NEXT`, el contador de `POWER-UP`, el selector `SKIN` y, al pie, los botones de icono de tema y ayuda.
 
 ### 2. `style.css`
 
@@ -228,7 +244,8 @@ Algunos parámetros fáciles de tunear en `game.js`:
 | `COLS`           | Columnas del tablero                            | `10`                  |
 | `ROWS`           | Filas del tablero                               | `20`                  |
 | `BLOCK`          | Tamaño en píxeles de cada celda                 | `30`                  |
-| `COLORS`         | Paleta de colores por tipo de pieza y power-up  | 13 colores            |
+| `COLORS`         | Paleta de colores por tipo de pieza y power-up (skin Retro/Pixel Art) | 13 colores |
+| `SKINS`          | Paletas y estilo de dibujo por skin visual      | ver `game.js`          |
 | `LINE_SCORES`    | Puntos por 1, 2, 3 o 4 líneas eliminadas        | `[0,100,300,500,800]` |
 | `dropInterval`   | Velocidad inicial de caída en ms                | `1000`                |
 | `POWERUP_EVERY`  | Líneas eliminadas entre power-ups               | `10`                  |

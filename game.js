@@ -81,6 +81,45 @@ const CANVAS_THEME_COLORS = {
   light: { grid: '#dde0f0', highlight: 'rgba(255,255,255,0.35)', hole: '#ffffff', holeEdge: 'rgba(30,34,60,0.25)', wild: '#e6b800' },
 };
 
+// --- Skins visuales -------------------------------------------------------
+// Cada skin define su propia paleta (misma indexación que COLORS) y un
+// `style` que selecciona la función de dibujo de bloque en drawBlock().
+const SKIN_STORAGE_KEY = 'tetris-skin';
+const SKINS = {
+  retro: {
+    label: 'Retro',
+    style: 'flat',
+    boardBg: null,
+    palette: COLORS,
+  },
+  neon: {
+    label: 'Neon',
+    style: 'glow',
+    boardBg: '#000000',
+    palette: [
+      null,
+      '#00fff7', '#faff00', '#ff00f7', '#00ff6a', '#ff0044', '#5170ff', '#ff9500',
+      '#c0c0c0', '#ff1744', '#fff700', '#ff4fa3', '#40c4ff', '#18ffff',
+    ],
+  },
+  pastel: {
+    label: 'Pastel',
+    style: 'rounded',
+    boardBg: null,
+    palette: [
+      null,
+      '#a8e6f0', '#fff2b2', '#dcb8e8', '#bdeab0', '#f4b8b8', '#c3c8f0', '#f8d3a8',
+      '#d8dce0', '#f6a8a8', '#fff3a0', '#f2b8d8', '#b8c8d0', '#b8e4f6',
+    ],
+  },
+  pixel: {
+    label: 'Pixel Art',
+    style: 'texture',
+    boardBg: null,
+    palette: COLORS,
+  },
+};
+
 const canvas = document.getElementById('board');
 const ctx = canvas.getContext('2d');
 const nextCanvas = document.getElementById('next-canvas');
@@ -99,10 +138,12 @@ const powerupStatusEl = document.getElementById('powerup-status');
 const powerupLegendEl = document.getElementById('powerup-legend');
 const helpToggleBtn = document.getElementById('help-toggle');
 const helpCloseBtn = document.getElementById('help-close');
+const skinSelectEl = document.getElementById('skin-select');
 
 let board, current, next, score, lines, level, paused, gameOver, lastTime, dropAccum, dropInterval, animId;
 let powerupPending, nextPowerupAt, lastPowerup, freezeUntil, freezeRemaining, effects;
 let canvasTheme = CANVAS_THEME_COLORS.dark;
+let currentSkin = 'retro';
 let helpOpen = false, helpPaused = false;
 
 function renderPowerupLegend() {
@@ -130,6 +171,20 @@ function toggleTheme() {
   localStorage.setItem(THEME_STORAGE_KEY, next);
   applyTheme(next);
   if (current) draw();
+}
+
+function applySkin(skin) {
+  currentSkin = SKINS[skin] ? skin : 'retro';
+  skinSelectEl.value = currentSkin;
+  const boardBg = SKINS[currentSkin].boardBg;
+  canvas.style.background = boardBg || '';
+  nextCanvas.style.background = boardBg || '';
+  if (current) { draw(); drawNext(); }
+}
+
+function changeSkin(skin) {
+  localStorage.setItem(SKIN_STORAGE_KEY, skin);
+  applySkin(skin);
 }
 
 function createBoard() {
@@ -419,17 +474,88 @@ function updatePowerupHUD() {
   }
 }
 
+function paletteColor(colorIndex) {
+  return SKINS[currentSkin].palette[colorIndex] || COLORS[colorIndex];
+}
+
+function shadeColor(hex, percent) {
+  const num = parseInt(hex.slice(1), 16);
+  let r = (num >> 16) + Math.round(2.55 * percent);
+  let g = ((num >> 8) & 0xff) + Math.round(2.55 * percent);
+  let b = (num & 0xff) + Math.round(2.55 * percent);
+  r = Math.min(255, Math.max(0, r));
+  g = Math.min(255, Math.max(0, g));
+  b = Math.min(255, Math.max(0, b));
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+function roundRectPath(context, x, y, w, h, radius) {
+  const r = Math.max(0, Math.min(radius, w / 2, h / 2));
+  context.beginPath();
+  context.moveTo(x + r, y);
+  context.arcTo(x + w, y, x + w, y + h, r);
+  context.arcTo(x + w, y + h, x, y + h, r);
+  context.arcTo(x, y + h, x, y, r);
+  context.arcTo(x, y, x + w, y, r);
+  context.closePath();
+}
+
+function drawRetroBlock(context, x, y, size, color) {
+  context.fillStyle = color;
+  context.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
+  context.fillStyle = canvasTheme.highlight;
+  context.fillRect(x * size + 1, y * size + 1, size - 2, 4);
+}
+
+function drawNeonBlock(context, x, y, size, color) {
+  const px = x * size + 1, py = y * size + 1, s = size - 2;
+  context.save();
+  context.shadowColor = color;
+  context.shadowBlur = size * 0.7;
+  context.fillStyle = color;
+  context.fillRect(px, py, s, s);
+  context.restore();
+  context.strokeStyle = 'rgba(255,255,255,0.6)';
+  context.lineWidth = 1;
+  context.strokeRect(px + 0.5, py + 0.5, s - 1, s - 1);
+}
+
+function drawPastelBlock(context, x, y, size, color) {
+  const px = x * size + 1, py = y * size + 1, s = size - 2;
+  const r = size * 0.22;
+  context.fillStyle = color;
+  roundRectPath(context, px, py, s, s, r);
+  context.fill();
+  context.fillStyle = 'rgba(255,255,255,0.4)';
+  roundRectPath(context, px, py, s, Math.max(4, s * 0.35), r);
+  context.fill();
+}
+
+function drawPixelBlock(context, x, y, size, color) {
+  const px = x * size + 1, py = y * size + 1, s = size - 2;
+  context.fillStyle = color;
+  context.fillRect(px, py, s, s);
+  const cell = Math.max(2, Math.floor(s / 4));
+  context.fillStyle = shadeColor(color, -22);
+  for (let i = 0; i < 4; i++)
+    for (let j = 0; j < 4; j++)
+      if ((i + j) % 2 === 0) context.fillRect(px + i * cell, py + j * cell, cell, cell);
+  context.fillStyle = shadeColor(color, 22);
+  context.fillRect(px, py, s, Math.max(2, Math.floor(s * 0.12)));
+}
+
 function drawBlock(context, x, y, colorIndex, size, alpha) {
   if (!colorIndex) return;
   if (colorIndex === HOLE) { drawHole(context, x, y, size, alpha); return; }
   if (colorIndex === WILD) { drawWild(context, x, y, size, alpha); return; }
-  const color = COLORS[colorIndex];
+  const color = paletteColor(colorIndex);
   context.globalAlpha = alpha ?? 1;
-  context.fillStyle = color;
-  context.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
-  // highlight
-  context.fillStyle = canvasTheme.highlight;
-  context.fillRect(x * size + 1, y * size + 1, size - 2, 4);
+  switch (SKINS[currentSkin].style) {
+    case 'glow': drawNeonBlock(context, x, y, size, color); break;
+    case 'rounded': drawPastelBlock(context, x, y, size, color); break;
+    case 'texture': drawPixelBlock(context, x, y, size, color); break;
+    default: drawRetroBlock(context, x, y, size, color); break;
+  }
   if (colorIndex >= BOMB) drawPowerupIcon(context, x, y, colorIndex, size);
   context.globalAlpha = 1;
 }
@@ -462,11 +588,13 @@ function drawWild(context, x, y, size, alpha) {
 
 function drawHole(context, x, y, size, alpha) {
   context.globalAlpha = alpha ?? 1;
-  // fondo metálico de la tuerca, igual que un bloque normal
-  context.fillStyle = COLORS[NUT];
-  context.fillRect(x * size + 1, y * size + 1, size - 2, size - 2);
-  context.fillStyle = canvasTheme.highlight;
-  context.fillRect(x * size + 1, y * size + 1, size - 2, 4);
+  // fondo metálico de la tuerca, igual que un bloque normal (respeta el skin activo)
+  switch (SKINS[currentSkin].style) {
+    case 'glow': drawNeonBlock(context, x, y, size, paletteColor(NUT)); break;
+    case 'rounded': drawPastelBlock(context, x, y, size, paletteColor(NUT)); break;
+    case 'texture': drawPixelBlock(context, x, y, size, paletteColor(NUT)); break;
+    default: drawRetroBlock(context, x, y, size, paletteColor(NUT)); break;
+  }
   // agujero circular central
   const cx = x * size + size / 2;
   const cy = y * size + size / 2;
@@ -698,7 +826,9 @@ restartBtn.addEventListener('click', init);
 themeToggleBtn.addEventListener('click', toggleTheme);
 helpToggleBtn.addEventListener('click', toggleHelp);
 helpCloseBtn.addEventListener('click', closeHelp);
+skinSelectEl.addEventListener('change', e => changeSkin(e.target.value));
 
 applyTheme(localStorage.getItem(THEME_STORAGE_KEY) === 'light' ? 'light' : 'dark');
+applySkin(localStorage.getItem(SKIN_STORAGE_KEY) || 'retro');
 renderPowerupLegend();
 init();
