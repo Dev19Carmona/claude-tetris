@@ -29,6 +29,16 @@
             <li><kbd>H</kbd> ayuda</li>
           </ul>
         </div>
+
+        <div class="panel-section records-section">
+          <span class="label">RECORDS</span>
+          <ol id="records-list" class="records-list"></ol>
+          <div class="records-stats">
+            <span id="best-combo-label" class="records-stat"></span>
+            <span id="max-lines-label" class="records-stat"></span>
+          </div>
+          <button id="reset-records-btn" class="reset-btn" type="button">Resetear récords</button>
+        </div>
       </aside>
 
       <div class="board-wrap">
@@ -38,6 +48,22 @@
           <div class="overlay-box" id="gameover-box">
             <p id="overlay-title">GAME OVER</p>
             <p id="overlay-score"></p>
+
+            <div id="overlay-records" class="overlay-records hidden">
+              <div id="highscore-form" class="highscore-form hidden">
+                <label for="player-name-input">¡Puntuación guardable! Tu nombre:</label>
+                <input id="player-name-input" type="text" maxlength="12" placeholder="Jugador" autocomplete="off" />
+                <button id="save-score-btn" type="button">Guardar</button>
+              </div>
+
+              <span class="label">RECORDS</span>
+              <ol id="overlay-records-list" class="records-list"></ol>
+              <div class="records-stats">
+                <span id="overlay-best-combo" class="records-stat"></span>
+                <span id="overlay-max-lines" class="records-stat"></span>
+              </div>
+            </div>
+
             <button id="restart-btn">Reiniciar</button>
           </div>
 

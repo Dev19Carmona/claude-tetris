@@ -32,6 +32,8 @@
   --board-w: 300px;
   --board-h: 600px;
   --panel-w: 168px;
+  --record-highlight-bg: rgba(255, 213, 79, 0.18);
+  --record-highlight-text: #ffd54f;
 }
 
 :root[data-theme="light"] {
@@ -59,6 +61,8 @@
   --toggle-hover-bg: #d7daf0;
   --grid-line: #dde0f0;
   --block-highlight: rgba(255, 255, 255, 0.35);
+  --record-highlight-bg: rgba(201, 151, 26, 0.16);
+  --record-highlight-text: #b8860b;
 }
 
 body {
@@ -198,6 +202,149 @@ body {
 .legend li.is-next {
   color: var(--value-color);
   background: var(--toggle-bg);
+}
+
+/* ---- Records ---- */
+.records-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 12px;
+}
+
+.records-list li {
+  display: grid;
+  grid-template-columns: 16px 1fr auto;
+  gap: 6px;
+  color: var(--controls-text);
+  padding: 2px 4px;
+  border-radius: 4px;
+}
+
+.records-list li .rank {
+  color: var(--label-color);
+  font-weight: 700;
+}
+
+.records-list li .rname {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.records-list li .rscore {
+  color: var(--value-color);
+  font-weight: 700;
+  text-align: right;
+}
+
+.records-list li.is-highlight {
+  background: var(--record-highlight-bg);
+  color: var(--record-highlight-text);
+}
+
+.records-list li.is-highlight .rank,
+.records-list li.is-highlight .rscore {
+  color: var(--record-highlight-text);
+}
+
+.records-empty {
+  font-size: 11px;
+  color: var(--controls-text);
+  font-style: italic;
+  list-style: none;
+}
+
+.records-stats {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  font-size: 11px;
+  color: var(--controls-text);
+}
+
+.reset-btn {
+  margin-top: 4px;
+  background: transparent;
+  border: 1px solid var(--toggle-border);
+  color: var(--controls-text);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 11px;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+.reset-btn:hover {
+  background: var(--toggle-hover-bg);
+  color: var(--toggle-text);
+}
+
+.overlay-records {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 210px;
+  text-align: left;
+}
+
+.overlay-records.hidden {
+  display: none;
+}
+
+.overlay-records .label {
+  display: block;
+  text-align: center;
+}
+
+.highscore-form {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  align-items: center;
+  padding: 8px;
+  border: 1px solid var(--toggle-border);
+  border-radius: 6px;
+  background: var(--toggle-bg);
+}
+
+.highscore-form.hidden {
+  display: none;
+}
+
+.highscore-form label {
+  font-size: 11px;
+  color: var(--overlay-score-color);
+  text-align: center;
+}
+
+#player-name-input {
+  width: 100%;
+  background: var(--board-bg);
+  border: 1px solid var(--board-border);
+  color: var(--text);
+  border-radius: 4px;
+  padding: 6px 8px;
+  font-size: 13px;
+  text-align: center;
+}
+
+#save-score-btn {
+  background: var(--restart-bg);
+  color: var(--restart-text);
+  border: none;
+  border-radius: 6px;
+  padding: 6px 16px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+#save-score-btn:hover {
+  background: var(--restart-hover-bg);
 }
 
 /* ---- Botones de icono (tema / ayuda) ---- */

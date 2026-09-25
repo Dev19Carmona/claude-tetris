@@ -18,6 +18,7 @@ Implementación del clásico **Tetris** en JavaScript vanilla, usando HTML5 Canv
     - [Opción 2: servidor local (recomendado)](#opción-2-servidor-local-recomendado)
   - [Controles](#controles)
   - [Tema claro / oscuro](#tema-claro--oscuro)
+  - [Tabla de records](#tabla-de-records)
   - [Power-ups](#power-ups)
   - [Cómo funciona](#cómo-funciona)
     - [1. `index.html`](#1-indexhtml)
@@ -46,6 +47,7 @@ Es una versión jugable del Tetris clásico con todas las mecánicas que esperar
 - **Niveles** que aumentan cada 10 líneas y aceleran la caída.
 - **Power-ups aleatorios**: cada 10 líneas cae una pieza especial (Bomba, Rayo, Tinte, Gravedad o Congelar) que dispara un efecto en vez de fijarse en el tablero.
 - **Pausa** y **Game Over** con opción de reinicio.
+- **Tabla de records local**: top 5 puntuaciones con nombre de jugador, mejor combo y máximo de líneas, guardados en `localStorage`.
 
 ---
 
@@ -104,6 +106,29 @@ El icono 🌙/☀️ al pie del panel derecho alterna entre modo oscuro (por def
 
 ---
 
+## Tabla de records
+
+El panel izquierdo (visible al cargar la página) y el overlay de **Game Over** muestran la misma
+tabla de records, persistida en `localStorage` bajo la clave `tetris-records`:
+
+- **Top 5 puntuaciones**, cada una con nombre de jugador. Al terminar una partida con puntuación
+  mayor que 0 aparece un campo de texto en el overlay (`¡Puntuación guardable!`) para introducir el
+  nombre (máx. 12 caracteres, o "Jugador" si se deja vacío); al guardar, la lista se reordena y se
+  recorta a 5 entradas.
+- La entrada recién guardada se **resalta en dorado** en ambas listas si logró entrar al top 5; si
+  la puntuación no alcanza para desplazar a ninguna de las cinco existentes, se guarda igual el
+  intento pero no se resalta nada porque no queda en la tabla.
+- **Mejor combo** y **máximo de líneas**: se registran como récords históricos independientes de la
+  tabla de puntuaciones (se actualizan en cada partida si se supera la marca anterior, entre en el
+  top 5 o no). El combo aumenta con cada pieza que completa al menos una línea de forma consecutiva
+  y se reinicia si una pieza se fija sin completar ninguna.
+- El botón **"Resetear récords"** (panel izquierdo) borra toda la tabla, el mejor combo y el máximo
+  de líneas, previa confirmación.
+- El overlay de **Pausa** reutiliza el mismo contenedor que Game Over, así que la sección de records
+  y el formulario de nombre se ocultan mientras el juego está en pausa.
+
+---
+
 ## Power-ups
 
 Cada **10 líneas** eliminadas (contador `POWERUP_EVERY` en `game.js`) la siguiente pieza especial se
@@ -147,8 +172,8 @@ Define la estructura visual:
 
 - Un `<canvas id="board">` de **300 × 600** píxeles donde se renderiza el tablero, envuelto en
   `.board-wrap` junto con el overlay de **PAUSA** / **GAME OVER**.
-- Un **panel izquierdo** de referencia estática (`EFECTOS` y `CONTROLES`), siempre visible en
-  pantallas anchas; en ventanas por debajo de 800px se oculta y se abre como modal con el botón ❓
+- Un **panel izquierdo** de referencia estática (`EFECTOS`, `CONTROLES` y `RECORDS`), siempre visible
+  en pantallas anchas; en ventanas por debajo de 800px se oculta y se abre como modal con el botón ❓
   (o la tecla `H`), pausando la partida mientras está abierto.
 - Un **panel derecho** con el estado vivo de la partida: `SCORE`, `LINES`, `LEVEL`, la vista previa
   `NEXT`, el contador de `POWER-UP` y, al pie, los botones de icono de tema y ayuda.
