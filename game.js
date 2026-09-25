@@ -92,6 +92,15 @@ const overlay = document.getElementById('overlay');
 const overlayTitle = document.getElementById('overlay-title');
 const overlayScore = document.getElementById('overlay-score');
 const restartBtn = document.getElementById('restart-btn');
+const gameoverBox = document.getElementById('gameover-box');
+const pauseMenu = document.getElementById('pause-menu');
+const pauseMenuMain = document.getElementById('pause-menu-main');
+const pauseMenuControls = document.getElementById('pause-menu-controls');
+const resumeBtn = document.getElementById('resume-btn');
+const pauseRestartBtn = document.getElementById('pause-restart-btn');
+const pauseControlsBtn = document.getElementById('pause-controls-btn');
+const pauseControlsBackBtn = document.getElementById('pause-controls-back-btn');
+const startLevelSelect = document.getElementById('start-level-select');
 const themeToggleBtn = document.getElementById('theme-toggle');
 const powerupCountdownEl = document.getElementById('powerup-countdown');
 const powerupHintEl = document.getElementById('powerup-hint');
@@ -104,6 +113,15 @@ let board, current, next, score, lines, level, paused, gameOver, lastTime, dropA
 let powerupPending, nextPowerupAt, lastPowerup, freezeUntil, freezeRemaining, effects;
 let canvasTheme = CANVAS_THEME_COLORS.dark;
 let helpOpen = false, helpPaused = false;
+const MAX_START_LEVEL = 10;
+let startLevel = 1;
+
+function renderStartLevelOptions() {
+  startLevelSelect.innerHTML = Array.from({ length: MAX_START_LEVEL }, (_, i) => i + 1)
+    .map(n => `<option value="${n}">${n}</option>`)
+    .join('');
+  startLevelSelect.value = String(startLevel);
+}
 
 function renderPowerupLegend() {
   powerupLegendEl.innerHTML = POWERUP_TYPES
@@ -554,9 +572,36 @@ function endGame() {
   // La parada real del bucle la hace la guarda en loop(); esto es solo
   // una red de seguridad por si endGame() se invoca fuera de un frame.
   cancelAnimationFrame(animId);
+  pauseMenu.classList.add('hidden');
+  gameoverBox.classList.remove('hidden');
   overlayTitle.textContent = 'GAME OVER';
   overlayScore.textContent = `Puntuación: ${score.toLocaleString()}`;
   overlay.classList.remove('hidden');
+}
+
+// El menú de pausa vive dentro del mismo overlay que GAME OVER, como una
+// caja hermana (#pause-menu) que se muestra/oculta en vez de reusar los
+// campos de título/score del game over.
+function showPauseMainView() {
+  pauseMenuControls.classList.add('hidden');
+  pauseMenuMain.classList.remove('hidden');
+}
+
+function showPauseControlsView() {
+  pauseMenuMain.classList.add('hidden');
+  pauseMenuControls.classList.remove('hidden');
+}
+
+function openPauseMenu() {
+  gameoverBox.classList.add('hidden');
+  showPauseMainView();
+  pauseMenu.classList.remove('hidden');
+  overlay.classList.remove('hidden');
+}
+
+function closePauseMenu() {
+  pauseMenu.classList.add('hidden');
+  overlay.classList.add('hidden');
 }
 
 function pauseGame(showOverlay = true) {
@@ -564,11 +609,7 @@ function pauseGame(showOverlay = true) {
   paused = true;
   freezeRemaining = freezeUntil > performance.now() ? freezeUntil - performance.now() : 0;
   cancelAnimationFrame(animId);
-  if (showOverlay) {
-    overlayTitle.textContent = 'PAUSA';
-    overlayScore.textContent = '';
-    overlay.classList.remove('hidden');
-  }
+  if (showOverlay) openPauseMenu();
 }
 
 function resumeGame(hideOverlay = true) {
@@ -580,15 +621,24 @@ function resumeGame(hideOverlay = true) {
     freezeUntil = performance.now() + freezeRemaining;
     freezeRemaining = 0;
   }
-  if (hideOverlay) overlay.classList.add('hidden');
+  if (hideOverlay) closePauseMenu();
   lastTime = performance.now();
   loop(lastTime);
 }
 
+// P / Escape: si el menú está en la sub-vista de controles, primero vuelve
+// al menú principal; si ya está en el menú principal, reanuda la partida.
 function togglePause() {
   if (gameOver) return;
-  if (paused) resumeGame();
-  else pauseGame();
+  if (paused) {
+    if (!pauseMenu.classList.contains('hidden') && !pauseMenuControls.classList.contains('hidden')) {
+      showPauseMainView();
+      return;
+    }
+    resumeGame();
+  } else {
+    pauseGame();
+  }
 }
 
 function openHelp() {
@@ -645,10 +695,10 @@ function init() {
   board = createBoard();
   score = 0;
   lines = 0;
-  level = 1;
+  level = startLevel;
   paused = false;
   gameOver = false;
-  dropInterval = 1000;
+  dropInterval = Math.max(100, 1000 - (level - 1) * 90);
   dropAccum = 0;
   lastTime = performance.now();
   powerupPending = false;
@@ -661,6 +711,8 @@ function init() {
   spawn();
   updateHUD();
   overlay.classList.add('hidden');
+  pauseMenu.classList.add('hidden');
+  gameoverBox.classList.remove('hidden');
   animId = requestAnimationFrame(loop);
 }
 
@@ -670,7 +722,7 @@ document.addEventListener('keydown', e => {
     return;
   }
   if (e.code === 'KeyH') { openHelp(); return; }
-  if (e.code === 'KeyP') { togglePause(); return; }
+  if (e.code === 'KeyP' || e.code === 'Escape') { togglePause(); return; }
   if (paused || gameOver) return;
   switch (e.code) {
     case 'ArrowLeft':
@@ -698,7 +750,15 @@ restartBtn.addEventListener('click', init);
 themeToggleBtn.addEventListener('click', toggleTheme);
 helpToggleBtn.addEventListener('click', toggleHelp);
 helpCloseBtn.addEventListener('click', closeHelp);
+resumeBtn.addEventListener('click', () => resumeGame());
+pauseRestartBtn.addEventListener('click', () => { closePauseMenu(); init(); });
+pauseControlsBtn.addEventListener('click', showPauseControlsView);
+pauseControlsBackBtn.addEventListener('click', showPauseMainView);
+startLevelSelect.addEventListener('change', () => {
+  startLevel = Number(startLevelSelect.value) || 1;
+});
 
 applyTheme(localStorage.getItem(THEME_STORAGE_KEY) === 'light' ? 'light' : 'dark');
 renderPowerupLegend();
+renderStartLevelOptions();
 init();
